@@ -7,6 +7,7 @@ import com.vocab.common.BizException;
 import com.vocab.common.ErrorCode;
 import com.vocab.common.PageResult;
 import com.vocab.common.Pages;
+import com.vocab.dto.response.AdminBookResponse;
 import com.vocab.dto.response.BookDetailResponse;
 import com.vocab.dto.response.BookLearnedCount;
 import com.vocab.dto.response.BookResponse;
@@ -205,13 +206,20 @@ public class WordBookServiceImpl implements WordBookService {
     // ---------------------------------------------------------------
 
     @Override
-    public List<BookResponse> adminListBooks() {
+    public List<AdminBookResponse> adminListBooks() {
         List<WordBook> books = wordBookMapper.selectList(
                 Wrappers.<WordBook>lambdaQuery().orderByAsc(WordBook::getId));
-        List<BookResponse> result = new ArrayList<>(books.size());
+        List<AdminBookResponse> result = new ArrayList<>(books.size());
         for (WordBook book : books) {
-            // 管理端无用户维度：selected / learnedCount 恒为 false / 0
-            result.add(toBookResponse(book, false, 0));
+            AdminBookResponse response = new AdminBookResponse();
+            response.setBookId(book.getId());
+            response.setName(book.getName());
+            response.setCategory(book.getCategory());
+            response.setWordCount(book.getWordCount());
+            response.setDescription(book.getDescription());
+            // 管理端独有：创建时间（学生端 §2.1 无此字段，故不复用 BookResponse）
+            response.setCreateTime(book.getCreateTime());
+            result.add(response);
         }
         return result;
     }

@@ -425,7 +425,7 @@ word 总行数: 22761 = 7508+5651+9602
 - **修 1 个真问题（规则一致性违反）**：`StatsMapper.xml#selectMasteryDaily` 原用 `DATE(create_time)`——**MySQL 专有函数**，违反「时间边界由 Java 传参」红线（同文件头注释自己就声明了该规则；H2 `MODE=MySQL` 恰好支持 `DATE()`，故测试全绿而漏检）。改为 SQL-92 `CAST(create_time AS DATE)`。
 - **实测**：`stage9-stats-smoke.py` **29 PASS / 0 FAIL**（真实 MySQL 8.4.9 + 真实 HTTP，自包含，只造 `stage9*` 用户）；直连 pymysql 验证 `CAST(create_time AS DATE)` 在 MySQL 8.4.9 正确返回日期；回归 `g4-smoke.py` 26 PASS / `g4-crossday.py` 18 PASS / `g5-smoke.py` 24 PASS，全 0 FAIL；全量 `mvn -o test` → **277 tests, 0 failures, 0 errors**。**红线** `anime_tracker` 仍 20 表。详见 `research/09-g6-stage9-stats-review.md`。
 
-## 10. 管理模块（阶段闸口 G6：先改契约文档，再改代码）—— **G6 已过（`29e8e5f`）；代码进行中**
+## 10. 管理模块（阶段闸口 G6：先改契约文档，再改代码）—— **G6 已过（`29e8e5f`）；阶段 10 实施完成，待 G7**
 
 40. [x] **先回写 `docs/接口详细设计.md`**：
     - §8 新增 8.8 `GET /api/admin/books`、8.9 `DELETE /api/admin/books/{bookId}`、8.10 `GET /api/admin/monitor/ai-stats`（含字段表与示例）
@@ -433,26 +433,42 @@ word 总行数: 22761 = 7508+5651+9602
     - 单独提交：`docs(contract): 补齐管理端接口并记录 word_progress 偏离`
     - **实际范围**：`docs/接口详细设计.md` V1.0→V1.1（20 处替换，390→498 行）+ `docs/S3-软件概要设计说明书-正文.md` V1.3（5 处替换）。落盘脚本 `.tmp/g6_contract.py` + `.tmp/g6_s3.py`，**每处断言「恰好命中一次」**（文本漂移即 `FAIL ... 命中 N 次` 并 `exit(1)`），避免静默漏改。
     - 提交 `29e8e5f`（**仅 2 文件**，用 `git add --pathspec-from-file=.tmp/g6_paths.txt` 精确 add）。
-41. [ ] `WordBookService.import(multipart)`：解析计数 → `saveBatch` → 校正 `word_count` → `{bookId, success, skipped}`；整体非法 → 2004
-42. [ ] `AdminWordController`：分页查询（bookId/keyword）、新增（`wordCount+1`）、修改、删除（逻辑删除，`wordCount−1`）
-43. [ ] `AdminUserController`：分页 + keyword 搜索、禁用/启用（**ADMIN 不可禁用 → 1005**）、操作 INFO 日志（操作者 id、动作、目标用户）
-44. [ ] `AdminBookController`：`GET /api/admin/books`、`DELETE /api/admin/books/{bookId}`
-45. [ ] `AdminMonitorController`：`GET /api/admin/monitor/ai-stats`
-46. [ ] 全部 `/api/admin/**` 校验 ADMIN（普通用户 → 403）
+41. [x] `AdminBookController` 导入：解析计数 → `saveBatch` → 校正 `word_count` → `{bookId, success, skipped}`；整体非法 → 2004（复用 `WordBookService.importBook`，Controller 只做 multipart→InputStream 与边界异常翻译）
+42. [x] `AdminWordController`：分页查询（bookId/keyword）、新增（`wordCount+1`）、修改、删除（逻辑删除，`wordCount−1`）
+43. [x] `AdminUserController`：分页 + keyword 搜索、禁用/启用（**ADMIN 不可禁用 → 1005**）、操作 INFO 日志（操作者 id、动作、目标用户）
+44. [x] `AdminBookController`：`GET /api/admin/books`、`DELETE /api/admin/books/{bookId}`
+45. [x] `AdminMonitorController`：`GET /api/admin/monitor/ai-stats`
+46. [x] 全部 `/api/admin/**` 校验 ADMIN（普通用户 → 403）—— 复用阶段 5 `JwtInterceptor` L116-117，未改动拦截器
 
 **验证**：
-- [ ] 普通用户 token 访问任一 `/api/admin/**` → HTTP 403
-- [ ] 导入一份**构造的含坏行**JSONL（如 3 行，1 行缺 `word`）→ 响应 `success:2, skipped:1`
-- [ ] 单词新增/删除后 `word_count` 正确 ±1
-- [ ] 禁用某用户 → 该用户 token 立即 401；禁用 ADMIN → 1005
-- [ ] `ai-stats` 能看到阶段 8 产生的降级计数
+- [x] 普通用户 token 访问任一 `/api/admin/**` → HTTP 403（`AdminControllerIntegrationTest` A1 + 冒烟 A1）
+- [x] 导入一份**构造的含坏行**JSONL（3 行，1 行缺 `word`）→ 响应 `success:2, skipped:1`（冒烟 C0）
+- [x] 单词新增/删除后 `word_count` 正确 ±1（集成 §8.3/§8.5 + 冒烟 D3/D10；另用 `AdminServiceImplTest` 断言「5 增 5 删精确回 0，无丢更新」）
+- [x] 禁用某用户 → 该用户 token 立即 401 + 1003；禁用 ADMIN → 1005（集成 + 冒烟 E6/E8）
+- [x] `ai-stats` 能看到阶段 8 产生的降级计数（冒烟 F6：真实触发一次 AI 降级后 `degradedCount` +1）
 
-**阶段 10 已就位的前置条件**（编码前侦察结论，**尚未写任何阶段 10 新代码**）：
-- `JwtInterceptor` 管理端角色拦截**阶段 5 已落位**（`path.startsWith("/api/admin/") && role != ADMIN` → HTTP 403 + 1007），`JwtInterceptorIntegrationTest` 已覆盖 403+1007 与 ADMIN 放行（落 404）；本阶段**无需改动拦截器**，只需建 Controller 端点。
-- `WordBookService` 三个管理端方法已占位待接 Controller：`adminListBooks()` / `importBook(InputStream,name,category)` / `deleteBook(Long)`。
-- 契约口径已冻结于 V1.1 §8（10 接口 = 7 契约原稿 + 3 补齐），编码严格照此执行。
-- 尚需新建：`dto/request/{WordUpsertRequest,UserStatusRequest}`、`dto/response/{AdminUserResponse,AiStatsResponse}`、`service/AdminService` + `impl/AdminServiceImpl`、`controller/admin/` 四个 Controller。
-- 冒烟脚本宜用独立前缀（如 `admin*` / `g6*`），只创建/清理自己的测试用户。
+**阶段 10 实施记录（已完成，326 测试全绿）**：
+
+- **产出文件**：
+  - 请求 DTO：`WordUpsertRequest`（§8.3/§8.4 共用，仅 `@Size`）、`UserStatusRequest`（`Integer` + `@NotNull`，刻意防漏传被默认 0 误读为「禁用」）
+  - 响应 DTO：`AdminUserResponse`、`AdminBookResponse`、`AiStatsResponse`、`AiFeatureStat`、`DegradeEventView`、`WordDeleteResponse`、`BookDeleteResponse`、`UserStatusResponse`、`UserCheckInCount`（内部投影，避 N+1）；**均独立成类，不复用实体/内部对象**
+  - `common/SuccessRate`（**新抽出的唯一真相源**：`percent(success,total)` 分母**含降级**、无调用取 100）；`AdminServiceImpl#aiStats` 改调它
+  - `service/AdminService` + `impl/AdminServiceImpl`（单词 CRUD / 用户列表 / 启禁 / AI 监控）
+  - `controller/admin/{AdminWordController,AdminUserController,AdminBookController,AdminMonitorController}`
+  - `WordBookService.adminListBooks()` 返回类型由 `List<BookResponse>` 收紧为 `List<AdminBookResponse>`（管理端需 `createTime`、不需 `selected`/`learnedCount`）
+  - `StatsMapper#countCheckInDaysByUsers` + XML（一次 `GROUP BY user_id` 批量取打卡天数）
+  - 测试：`AdminControllerIntegrationTest`(31)、`AdminServiceImplTest`(13)、`SuccessRateTest`(5)
+- **开工时修 1 个真缺陷（参数语义混淆）**：`createWord` 原先直接 `requireBook(bookId)`，`bookId == null` 时 `requireBook(null)` 会先撞空指针/落进 2001；新增显式 `bookId == null → 1005` 前置判定，使「少传字段(1005)」与「词书不存在(2001)」两条语义分离（`AdminServiceImplTest#createWordDistinguishesMissingAndNonexistentBook` 锁死）。
+- **`word_count` 用 SQL 原子自增/减**：`setSql("word_count = word_count + (delta)")` + 显式 `set(updateTime, now(clock))`。因 `entity=null` 的 `update(null, wrapper)` 不触发 `MetaObjectHandler`，不手填会留下「行改了时间没变」脏数据；用注入的 `Clock` 而非 SQL `NOW()`，与「时间边界由 Java 传参」红线一致。
+- **`ai-stats` 口径**：`successRate` 分母含降级（否则永远 100%），`avgCostMs` 含降级、无调用 0，`recentEvents` 最新在前最多 100，`features` 固定 example/explain/report 顺序。
+- **测试自身错 3 处（已修）**：`AdminServiceImplTest.deleteWordIsLogical` 夹具初值设 1 却又 +1 → 改初值 0；`assertEquals(long,int)` 重载歧义 → `(long)` 强转；`AiMetrics` 是单例内存计数器 → `aiStats` 断言一律用「前后快照差值」而非绝对值。
+- **实测**：`stage10-admin-smoke.py` **46 PASS / 0 FAIL**（真实 jar + 真实 MySQL 8.4.9 + 真实 HTTP，46 用例 A0–H1，`DBPASS` 环境变量，独立前缀 `g6adm_`/`g6usr_`/`G6冒烟`，末尾按前缀精确物理清理）；回归 `g4-smoke.py` 26 / `g4-crossday.py` 18 / `g5-smoke.py` 24 / `stage9-stats-smoke.py` 29 全 0 FAIL；全量 `mvn -o test` → **326 tests, 0 failures, 0 errors**；服务日志 ERROR=0；**红线** `anime_tracker` 仍 20 表（真库现有 26 用户 / 22761 词 / 3 词书，冒烟后无 `g6*` 残留）。详见 `research/10-g6-stage10-admin-review.md`。
+
+**阶段 10 开工时的前置条件**（编码前侦察结论，现已全部满足）：
+- `JwtInterceptor` 管理端角色拦截**阶段 5 已落位**（`path.startsWith("/api/admin/") && role != ADMIN` → HTTP 403 + 1007），本阶段**未改动拦截器**，只建 Controller 端点。副作用见下。
+- `WordBookService` 三个管理端方法已于阶段 6 实现，本阶段接 Controller：`adminListBooks()` / `importBook(InputStream,name,category)` / `deleteBook(Long)`。
+- 契约口径冻结于 V1.1 §8（10 接口 = 7 契约原稿 + 3 补齐），编码严格照此执行。
+- **测试连带影响（已修）**：管理端 Controller 落地后 `/api/admin/users` 由「404 证明已过鉴权」变为「200 命中真实 Controller」，`JwtInterceptorIntegrationTest` 中两处硬编码 404 断言随之失效。改为语义断言「**非 401/403 即已过拦截器**」（常量 `AUTH_PASSED=200`），避免每新增一个管理端接口就误报一次。
 
 ## 11. 收尾（阶段闸口 G7：可交付）—— **未开始**
 

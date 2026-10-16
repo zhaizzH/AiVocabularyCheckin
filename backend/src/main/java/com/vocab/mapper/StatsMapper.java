@@ -3,6 +3,7 @@ package com.vocab.mapper;
 import com.vocab.dto.response.BookLearnedCount;
 import com.vocab.dto.response.HeatmapDay;
 import com.vocab.dto.response.MasteryPoint;
+import com.vocab.dto.response.UserCheckInCount;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -70,6 +71,25 @@ public interface StatsMapper {
      * AI 学习报告前置校验（学习天数 &lt; 3 → 5003，需求清单 §4.3）。
      */
     Integer countCheckInDays(@Param("userId") Long userId);
+
+    /**
+     * 批量取「这批用户各自的累计打卡天数」——管理端用户列表专用（契约 §8.6）。
+     *
+     * <p><b>为什么是批量而不是逐用户调用 {@link #countCheckInDays}</b>：
+     * 用户列表每页 20 行、每行都要显示 {@code totalCheckInDays}。
+     * 在 Java 里逐行调用会退化成 20 次 COUNT（典型 N+1，
+     * database-guidelines.md「常见错误」明确禁止）。一次
+     * {@code GROUP BY user_id} 拿到整页数据，SQL 次数恒为 2
+     * （1 次分页 + 1 次本聚合），与页大小无关。
+     *
+     * <p>只返回「有打卡记录」的用户——Service 侧对查不到的用户
+     * 用 {@code getOrDefault(userId, 0)} 兜底为 0，避免为「零打卡用户」
+     * 也强行补一行。
+     *
+     * @param userIds 当前页的用户 id 列表（{@code IN} 展开；空集合由调用方短路，
+     *                不查库——空 {@code IN ()} 是语法错误）
+     */
+    List<UserCheckInCount> countCheckInDaysByUsers(@Param("userIds") List<Long> userIds);
 
     /**
      * 某日（含）以来的打卡天数——AI 学习报告的 {@code checkInRate} 分子。

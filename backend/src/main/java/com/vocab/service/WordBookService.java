@@ -1,5 +1,6 @@
 package com.vocab.service;
 
+import com.vocab.dto.response.AdminBookResponse;
 import com.vocab.dto.response.BookDetailResponse;
 import com.vocab.dto.response.BookResponse;
 import com.vocab.dto.response.ImportResult;
@@ -57,8 +58,19 @@ public interface WordBookService {
 
     // ---------------- 管理端 ----------------
 
-    /** 管理端词书列表（契约增补 §8.3）：全部词书（含未选），无用户维度。 */
-    List<BookResponse> adminListBooks();
+    /**
+     * 管理端词书列表（契约 §8.8）：全部词书（含未选），无用户维度。
+     *
+     * <p><b>返回值是 {@link AdminBookResponse} 而非 {@link BookResponse}</b>：
+     * 管理端要的是 {@code createTime}（词库管理页表格列），
+     * 不需要学生端的 {@code selected} / {@code learnedCount}
+     * （那两个字段按 userId 计算，管理端无用户维度，恒为 false/0）。
+     * 直接复用 {@code BookResponse} 会让响应里多出两个恒定噪声字段，
+     * 且契约 §8.8 明确列出了管理端的字段清单。
+     *
+     * <p>响应为<b>裸数组</b>而非分页结构（词书总量个位数量级，与学生端 §2.1 同款口径）。
+     */
+    List<AdminBookResponse> adminListBooks();
 
     /**
      * 管理端导入词书（契约 §8.1）。

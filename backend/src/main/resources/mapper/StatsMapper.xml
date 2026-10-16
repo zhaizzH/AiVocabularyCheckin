@@ -94,6 +94,25 @@
           AND check_in_date IS NOT NULL
     </select>
 
+    <!--
+      批量取「这批用户各自的累计打卡天数」（管理端用户列表 §8.6）。
+      一次 GROUP BY user_id 取代「每行一次 COUNT」的 N+1。
+      逻辑删除条件必须显式写（XML 不会自动附加）。
+      userIds 由调用方保证非空（空 IN () 是语法错误）。
+    -->
+    <select id="countCheckInDaysByUsers" resultType="com.vocab.dto.response.UserCheckInCount">
+        SELECT user_id                          AS user_id,
+               COUNT(DISTINCT check_in_date)    AS check_in_days
+        FROM study_record
+        WHERE user_id IN
+        <foreach collection="userIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+          AND deleted = 0
+          AND check_in_date IS NOT NULL
+        GROUP BY user_id
+    </select>
+
     <!-- 某日起的打卡天数（AI 报告的 checkInRate 分子），边界由 Java 传入 -->
     <select id="countCheckInDaysSince" resultType="int">
         SELECT COUNT(DISTINCT check_in_date)

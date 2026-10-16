@@ -31,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   <li>无 token → 401 + 1006（响应体仍为 Result 结构，不能是 Spring 默认错误页）</li>
  *   <li>公开路径放行（不因缺 token 被 401）</li>
  *   <li>非管理员访问 /api/admin/** → 403</li>
- *   <li>ADMIN 访问管理端 → 放行（此处落到 404，证明已过鉴权）</li>
+ *   <li>ADMIN 访问管理端 → 放行（此处落到 200，证明已过鉴权）</li>
  *   <li>CORS 预检放行</li>
  *   <li>{@link UserContext} 不残留（线程复用不串号）</li>
  * </ul>
@@ -59,7 +59,19 @@ class JwtInterceptorIntegrationTest {
     /** 已存在的用户访问 {PROFILE} 不再落到 404，而是命中真实的 AuthController。 */
     private static final int PROFILE_OK = 200;
 
-    /** 管理端此时仍无任何 Controller，鉴权通过后落到「接口不存在」的 404。 */
+    /**
+     * 请求已通过鉴权、命中真实 Controller 的状态码。
+     *
+     * <p><b>阶段 10 变化</b>：{@code /api/admin/users} 之前没有任何 Controller，
+     * 鉴权通过后会落到「接口不存在」的 404；管理端 Controller 落地后
+     * 该路径会命中 {@code AdminUserController} 并返回 200。
+     * 两类用例的意图都是「证明已过鉴权」，故统一改用本常量：
+     * <b>只要不是 401/403，就说明请求穿过了拦截器</b>。
+     * 继续硬编码 404 会在每次新增管理端接口时误报。
+     */
+    private static final int AUTH_PASSED = 200;
+
+    /** 无对应 Controller 时 HTTP 404 仍是合法结果（保留给真·未实现路径）。 */
     private static final int NO_HANDLER = 404;
 
     private User newUser(String role) {
@@ -152,12 +164,13 @@ class JwtInterceptorIntegrationTest {
     }
 
     @Test
-    @DisplayName("管理员访问管理端接口 → 通过鉴权（落到 404 证明拦截器已放行）")
+    @DisplayName("管理员访问管理端接口 → 通过鉴权（命中真实 Controller，非 401/403）")
     void adminRoleAllowedOnAdminPath() throws Exception {
         User admin = newUser(Constants.ROLE_ADMIN);
         mockMvc.perform(get("/api/admin/users")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenFor(admin)))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"));
     }
 
     @Test
@@ -265,7 +278,7 @@ class JwtInterceptorIntegrationTest {
         int status = mockMvc.perform(get("/definitely-not-api"))
                 .andReturn().getResponse().getStatus();
         // 非 /api 路径不被拦截器处理，直接 404；若被拦成 401 说明配置范围写宽了
-        assertTrue(status == NO_HANDLER || status == PROFILE_OK,
+        assertTrue(status == NO_HANDLER || status == PROFILE_OK || status == AUTH_PASSED,
                 "非 /api 路径不应被鉴权拦截器处理，实际状态码 " + status);
     }
 
@@ -277,7 +290,7 @@ class JwtInterceptorIntegrationTest {
 
         mockMvc.perform(get("/api/admin/users")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk());
 
         admin.setStatus(Constants.STATUS_DISABLED);
         userMapper.updateById(admin);
