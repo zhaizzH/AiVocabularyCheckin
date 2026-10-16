@@ -124,4 +124,38 @@
         GROUP BY book_id
     </select>
 
+    <!--
+      某日已上报学习词数（契约 §3.1 finished / §3.3 todayLearned）。
+      去重 word_id：同一天对同一个词重复上报（复习后再学习）只算一个词。
+      日期由 Java 传入，不写 CURDATE()（方言无关 + 可单测）。
+    -->
+    <select id="countLearnedWordsOnDate" resultType="int">
+        SELECT COUNT(DISTINCT word_id)
+        FROM study_record
+        WHERE user_id = #{userId}
+          AND deleted = 0
+          AND study_date = #{date}
+    </select>
+
+    <!-- 某日到期待复习词数（契约 §3.4 todayReviewCount）：与 §4.1 列表同一定义 -->
+    <select id="countDueReviewWords" resultType="int">
+        SELECT COUNT(*)
+        FROM word_progress
+        WHERE user_id = #{userId}
+          AND deleted = 0
+          AND learned = 1
+          AND next_review_date IS NOT NULL
+          AND next_review_date &lt;= #{date}
+    </select>
+
+    <!-- 某日新增错题数（契约 §3.3 todayMistakes）：create_time 落在 [dayStart, dayEnd) 内 -->
+    <select id="countMistakesOnDate" resultType="int">
+        SELECT COUNT(*)
+        FROM mistake_entry
+        WHERE user_id = #{userId}
+          AND deleted = 0
+          AND create_time &gt;= #{dayStart}
+          AND create_time &lt; #{dayEnd}
+    </select>
+
 </mapper>

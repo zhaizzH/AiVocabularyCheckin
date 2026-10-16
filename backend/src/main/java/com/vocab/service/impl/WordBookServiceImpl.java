@@ -4,9 +4,9 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.vocab.common.BizException;
-import com.vocab.common.Constants;
 import com.vocab.common.ErrorCode;
 import com.vocab.common.PageResult;
+import com.vocab.common.Pages;
 import com.vocab.dto.response.BookDetailResponse;
 import com.vocab.dto.response.BookLearnedCount;
 import com.vocab.dto.response.BookResponse;
@@ -132,7 +132,7 @@ public class WordBookServiceImpl implements WordBookService {
         WordBook book = requireBook(bookId);
 
         IPage<Word> wordPage = wordMapper.selectPage(
-                new Page<>(normalizePage(page), normalizeSize(size)),
+                new Page<>(Pages.normalizePage(page), Pages.normalizeSize(size)),
                 Wrappers.<Word>lambdaQuery()
                         .eq(Word::getBookId, bookId)
                         .orderByAsc(Word::getId));
@@ -250,14 +250,10 @@ public class WordBookServiceImpl implements WordBookService {
     }
 
     private long normalizePage(long page) {
-        return page < 1 ? Constants.DEFAULT_PAGE : page;
+        return Pages.normalizePage(page);
     }
 
     private long normalizeSize(long size) {
-        if (size < 1) {
-            return Constants.DEFAULT_SIZE;
-        }
-        // 上限交给分页插件的 maxLimit，这里只挡住 0/负数
-        return size;
+        return Pages.normalizeSize(size);
     }
 }

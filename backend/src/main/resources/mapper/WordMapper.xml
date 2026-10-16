@@ -28,4 +28,40 @@
         </foreach>
     </insert>
 
+    <!--
+      今日计划的新词候选：该词书内「按 id 升序未学、且今天还没选过」的前 N 个词。
+
+      判定「历史上已学过」用 create_time < dayStart 且 learned = 1：
+        * create_time 是**首次进入学习计划**时写入的，之后不再变化
+          （update_time 会在每次复习/重学后被刷新，不能用来判断「历史上学过」——
+          否则一个词在第二天被复习后，update_time 变成当天，它就会重新变成「新词」，
+          以致同一本书反复从头开始）；
+        * 创建于今天及以后的词——它们是「今天已经选中的词」，必须继续留在候选集里
+          （否则每上报一个词就会补进一个新词，计划窗口不断后滑、永远无法打卡）；
+        * 创建于今天的 00:00 之前且已学过的词——历史已学，不再作为新词
+          （它们应出现在 §4.1 的待复习列表里）。
+      注意：不能写成「有没有 word_progress 行」，否则今天刚上报的词会立即消失。
+      dayStart 由 Service 用 Clock 计算后传入，不用 CURDATE()——保证 H2 测试
+      与 MySQL 生产同一份 SQL 语义，并可注入固定日期做单测。
+
+      deleted = 0 必须显式写（mapping 层不介入本语句）。
+    -->
+    <select id="selectUnlearnedNewWordIds" resultType="java.lang.Long">
+        SELECT w.id
+        FROM `word` w
+        WHERE w.book_id = #{bookId}
+          AND w.deleted = 0
+          AND NOT EXISTS (
+              SELECT 1
+              FROM `word_progress` p
+              WHERE p.user_id = #{userId}
+                AND p.word_id = w.id
+                AND p.deleted = 0
+                AND p.create_time &lt; #{dayStart}
+                AND p.learned = 1
+          )
+        ORDER BY w.id ASC
+        LIMIT #{limit}
+    </select>
+
 </mapper>

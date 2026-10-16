@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!--
+  学习进度相关的多表联查 SQL。
+
+  规范红线（spec/database-guidelines.md）：
+    1. 手写 XML 不会自动附加逻辑删除条件——每个参与的表都要手工写 `deleted = 0`。
+       本文件涉及 word_progress / word / user_word_book / mistake_entry 四张表，
+       其中 user_word_book 是**物理删除表**（无 deleted 列），故不需要该条件。
+    2. 聚合与多表联查在 SQL 内完成，不把明细加载到 Java 再过滤。
+
+  为什么需要 XML 而不是 Wrapper：计划/待复习列表都要「进度表 JOIN 单词表」
+  取单词文本，LambdaQueryWrapper 只能表达单表条件（JOIN 需 selectJoinList 或
+  XML），且 wrong_count 需从 mistake_entry 取——属于规范允许的 XML 场景。
+
+  日期边界统一由 Java 传入（today / dayStart），不用 CURDATE()：
+  保证 H2 测试与 MySQL 生产执行同一份 SQL，并可注入固定日期做单测。
+-->
+<mapper namespace="com.vocab.mapper.WordProgressMapper">
+
+    <!--
+      今日计划的复习词（契约 §3.1）。
+      排序：先按到期日（逾期最久的先复习），再按进度行 id 保证稳定顺序。
+    -->
+    <select id="selectPlanReviewWords" resultType="com.vocab.dto.response.StudyWordResponse">
+        SELECT w.id        AS word_id,
+               w.book_id   AS book_id,
+               w.word      AS word,
+               w.phonetic  AS phonetic,
+               w.translation AS translation,
+               w.example   AS example
+        FROM `word_progress` p
+        JOIN `word` w
+          ON w.id = p.word_id
+         AND w.deleted = 0
+        JOIN `user_word_book` b
+          ON b.user_id = p.user_id
+         AND b.book_id = p.book_id
+        WHERE p.user_id = #{userId}
+          AND p.deleted = 0
+          AND p.learned = 1
+          AND p.next_review_date IS NOT NULL
+          AND p.next_review_date &lt;= #{today}
+        ORDER BY p.next_review_date ASC, p.id ASC
+    </select>
+
+    <!--
+      今日待复习列表（契约 §4.1）：与计划中的复习词同源，
+      额外带 stage 与错题本的权威 wrong_count。
+    -->
+    <select id="selectDueReviewWords" resultType="com.vocab.dto.response.ReviewWordResponse">
+        SELECT w.id        AS word_id,
+               w.word      AS word,
+               w.phonetic  AS phonetic,
+               w.translation AS translation,
+               w.example   AS example,
+               p.stage     AS stage,
+               COALESCE(m.wrong_count, 0) AS wrong_count
+        FROM `word_progress` p
+        JOIN `word` w
+          ON w.id = p.word_id
+         AND w.deleted = 0
+        JOIN `user_word_book` b
+          ON b.user_id = p.user_id
+         AND b.book_id = p.book_id
+        LEFT JOIN `mistake_entry` m
+          ON m.user_id = p.user_id
+         AND m.word_id = p.word_id
+         AND m.deleted = 0
+        WHERE p.user_id = #{userId}
+          AND p.deleted = 0
+          AND p.learned = 1
+          AND p.next_review_date IS NOT NULL
+          AND p.next_review_date &lt;= #{today}
+        ORDER BY p.next_review_date ASC, p.id ASC
+    </select>
+
+</mapper>

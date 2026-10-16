@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -100,4 +101,37 @@ public interface StatsMapper {
      * @param userId 用户 id
      */
     List<BookLearnedCount> selectLearnedCountByBook(@Param("userId") Long userId);
+
+    /**
+     * 某日「已上报学习」的词数：{@code study_record} 中该用户该日的去重
+     * {@code word_id} 数（不分学习/复习）。
+     *
+     * <p>用于契约 §3.1 的 {@code finished} 与 §3.3 的 {@code todayLearned}。
+     * 取「已上报过」而非「计划总词数」是关键：它必须能与 {@code total}
+     * 直接比较来判断能否打卡。
+     *
+     * @param userId 用户 id
+     * @param date   学习日期（由 Service 用 Clock 计算）
+     */
+    Integer countLearnedWordsOnDate(@Param("userId") Long userId, @Param("date") LocalDate date);
+
+    /**
+     * 某日到期待复习的词数（契约 §3.4 的 {@code todayReviewCount}）。
+     *
+     * <p>定义：{@code word_progress} 中 {@code learned=1} 且
+     * {@code next_review_date <= date} 的去重单词数——与契约 §4.1
+     * 的待复习列表同一定义，共用 {@code idx_word_progress_user_review} 索引。
+     */
+    Integer countDueReviewWords(@Param("userId") Long userId, @Param("date") LocalDate date);
+
+    /**
+     * 某日新增错题数（契约 §3.3 的 {@code todayMistakes}）。
+     *
+     * <p>按 {@code mistake_entry.create_time} 落在 {@code [dayStart, dayEnd)} 内统计——
+     * 语义是「今天新收录的错题条目」，与「今天答错次数」不同（后者是
+     * {@code wrong_count} 的当日增量，无独立流水可查）。
+     */
+    Integer countMistakesOnDate(@Param("userId") Long userId,
+                                @Param("dayStart") LocalDateTime dayStart,
+                                @Param("dayEnd") LocalDateTime dayEnd);
 }
