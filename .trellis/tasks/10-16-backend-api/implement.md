@@ -10,14 +10,14 @@
 
 ## 1. 前置准备（阶段闸口：数据库可连、词库文件落盘）
 
-1. [ ] 建库：`CREATE DATABASE IF NOT EXISTS ai_vocab DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;`（通过 DBX MCP `aivocab-root` 连接执行）
-2. [ ] 词库落盘到 `data/vocab-source/`：`四级.jsonl` / `六级.jsonl` / `考研.jsonl`
+1. [x] 建库：`CREATE DATABASE IF NOT EXISTS ai_vocab DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;`（通过 DBX MCP `aivocab-root` 连接执行）
+2. [x] 词库落盘到 `data/vocab-source/`：`CET4.jsonl`(7,403,986 B) / `CET6.jsonl`(4,340,935 B) / `KAOYAN.jsonl`(8,627,487 B)
    - 已实测可行路径：`git clone --depth 1 --filter=blob:none --sparse` + `git sparse-checkout set --no-cone`（逐个文件加，一次加多个会失败）
    - 三份文件总计约 24MB，**加入 `.gitignore`**（不入库）
-   - 同时落盘 `LICENSE`（BSD 3-Clause，用户手册要用）
-3. [ ] 校验行数：`wc -l` 必须为 7508 / 5651 / 9602
+   - 同时落盘 `LICENSE`（BSD 3-Clause，1,528 B；用户手册要用）
+3. [x] 校验行数：`wc -l` = **7508 / 5651 / 9602**（0 坏行）
 
-**验证**：`SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='ai_vocab'` 有结果；三个 jsonl 行数正确。
+**验证**：`SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='ai_vocab'` ✅ 有结果；三个 jsonl 行数 ✅ 正确。
 
 ## 2. 工程骨架（阶段闸口：`mvn clean package` 通过、空应用能启动）
 
@@ -330,58 +330,109 @@ word 总行数: 22761 = 7508+5651+9602
 *测试*：`mvn -o clean test` → **143 tests, 0 failures, 0 errors**（阶段 5 为 118，本阶段 +25：
 `WordImportServiceImplTest` 11 例 + `BookControllerIntegrationTest` 14 例）。
 
-## 7. 学习 + 复习 + 错题（阶段闸口：核心闭环端到端跑通）
+*G3 闸口结论*：**通过**（`e140517`）。三本词书计数 7508/5651/9602 严格一致、二次运行幂等；
+`word` 时间列 NULL 计数 0；HTTP 冒烟 20 用例全过。详见 `research/05-g3-stage6-vocab-review.md`。
 
-23. [ ] `StudyService.plan(userId)`：按 design.md §4.1 生成（复习词在前、每词书 20 新词、`learned` 标记）
-24. [ ] `StudyService.record(userId, req)`：写 `word_progress`（upsert）、`known=false` 立即收录错题、首次学习设置 `stage=1, next_review_date=+1天`
-25. [ ] `StudyService.checkIn(userId)`：design.md §4.2（3001 幂等 / 3002 / 3003 / streak 计算）
-26. [ ] `StudyService.streak(userId)`
-27. [ ] `ReviewService.today(userId)`：`next_review_date <= CURDATE() AND learned=1` 且未掌握
-28. [ ] `ReviewService.record(userId, req)`：design.md §4.3（答对 stage+1 封顶 4；答错 stage=1、`wrong_count`+1、确保收录错题）
-29. [ ] `MistakeService`：`list`（分页 + `mastered` 筛选）、`markMastered`（4001/4002）、`remove`（逻辑删除，4001）
-30. [ ] 三个 Controller + DTO
+## 7. 学习 + 复习 + 错题（阶段闸口 G4：核心闭环端到端跑通）—— **已完成（231 测试全绿；G4 已过，`76cf216`）**
+
+23. [x] `StudyService.plan(userId)`：按 design.md §4.1 生成（复习词在前、每词书 20 新词、`learned` 标记）
+24. [x] `StudyService.record(userId, req)`：写 `word_progress`（upsert）、`known=false` 立即收录错题、首次学习设置 `stage=1, next_review_date=+1天`
+25. [x] `StudyService.checkIn(userId)`：design.md §4.2（3001 幂等 / 3002 / 3003 / streak 计算）
+26. [x] `StudyService.streak(userId)`
+27. [x] `ReviewService.today(userId)`：`next_review_date <= CURDATE() AND learned=1` 且未掌握
+28. [x] `ReviewService.record(userId, req)`：design.md §4.3（答对 stage+1 封顶 4；答错 stage=1、`wrong_count`+1、确保收录错题）
+29. [x] `MistakeService`：`list`（分页 + `mastered` 筛选）、`markMastered`（4001/4002）、`remove`（逻辑删除，4001）
+30. [x] 三个 Controller + DTO
 
 **验证（含算法单测）**：
-- [ ] `StudyServiceTest`：streak 连续 +1；中断重置为 1；同日重复打卡返回 3001 且无重复行
-- [ ] `ReviewServiceTest`：连对 4 次 stage 依次 2/3/4/4；答错后 stage=1 且 `next_review_date`=明天
-- [ ] `MistakeServiceTest`：同词两次错误 → 一条记录 `wrong_count=2`；标记已掌握后再次答错 → `mastered` 回到 0
-- [ ] 手工全链路 curl 脚本：注册 → select 词书 → plan（20 词）→ record ×20（其中一个 known=false）→ checkin → mistakes 有 1 条 → 手工把 `next_review_date` 改成昨天 → review/today 见到该词 → review/record correct=false → 查 `word_progress` stage=1、`mistake_entry.wrong_count=2`
+- [x] `StudyServiceTest`：streak 连续 +1；中断重置为 1；同日重复打卡返回 3001 且无重复行
+- [x] `ReviewServiceTest`：连对 4 次 stage 依次 2/3/4/4；答错后 stage=1 且 `next_review_date`=明天
+- [x] `MistakeServiceTest`：同词两次错误 → 一条记录 `wrong_count=2`；标记已掌握后再次答错 → `mastered` 回到 0
+- [x] 手工全链路脚本：`g4-smoke.py`（26 PASS）+ `g4-crossday.py`（18 PASS），真实 MySQL + 真实 HTTP，覆盖上条全部断言
 
-## 8. AI 中转与降级（阶段闸口：ai-service 未启动时降级路径全绿）
+**阶段 7 实施记录（已完成，231 测试全绿；G4 已过）**：
 
-31. [ ] `AiService`：`example` / `explain` / `report`，各自超时 15/30/60s（`RestTemplateBuilder` 每次构造）
-32. [ ] `AiMetrics`：内存计数器 + 环形降级事件队列（容量 100）
-33. [ ] `AiController` + DTO
-34. [ ] **`example` 降级不抛异常**（HTTP 200 + `code:"0"` + `degraded:true` + `word.example`）——代码中加显式注释
-35. [ ] `report` 前置：学习天数 < 3 → 5003 且**不发起 HTTP**
-36. [ ] `explain` 降级 → 抛 5001/5002
+- **产出文件**：
+  - `dto/response/` 11 个（`StudyWordResponse` / `StudyPlanResponse` / `StudyRecordResponse` / `CheckInResponse` / `StreakResponse` / `ReviewWordResponse` / `ReviewTodayResponse` / `ReviewRecordResponse` / `MistakeResponse` / `MistakeMasteredResponse` / `MistakeRemoveResponse`）；`dto/request/` 2 个（`StudyRecordRequest` / `ReviewRecordRequest`，`@NotNull`）
+  - `config/ClockConfig`（`Clock.systemDefaultZone()` Bean，使「今天」可注入固定日期）、`common/Pages`（分页参数归一化，`WordBookServiceImpl` 一并重构复用）
+  - `service/ReviewSchedule`（纯函数 `nextStage` / `intervalDays` / `nextReviewDate`，常量 `REVIEW_INTERVALS=[1,3,7,15]`）
+  - `service/` + `impl/`：`StudyService` / `ReviewService` / `MistakeService`
+  - `mapper/WordMapper#selectUnlearnedNewWordIds`、`mapper/WordProgressMapper#selectPlanReviewWords/#selectDueReviewWords` + `resources/mapper/WordProgressMapper.xml`（NEW，4 表 JOIN，手工 `deleted=0`）、`StatsMapper` 三个计数
+  - `controller/`：`StudyController` / `ReviewController` / `MistakeController`（薄层，userId 取 `UserContext`）
+  - 测试：`ReviewScheduleTest`(8) / `StudyServiceImplTest`(24) / `ReviewServiceImplTest`(16) / `MistakeServiceImplTest`(23) / `StudyFlowControllerIntegrationTest`(17)；测试支撑 `testsupport/FixedClock` + `TestClockConfig`（`@Primary` 覆盖生产 Clock）
+
+- **修 2 个真缺陷（均由测试先失败暴露）**：
+  1. **「做完反而不能打卡」（缺陷 A）**：原计划按实时推导生成，词上报后逐词从计划消失，全部做完 `total=0`，`checkIn` 抛 3002。修复：计划语义改为「今日任务集合」——追加第三段「今天已上报过的词」（`todayReportedWordTypes` 按流水 id 升序返回 `LinkedHashMap<wordId,studyType>`），使 `total` 恒定、`finished` 单调递增。**该修复已回写契约 §3.1（V1.1）**。
+  2. **计划候选集后滑（缺陷 B）**：`selectUnlearnedNewWordIds` 判据原为 `update_time < #{dayStart}`，而 `update_time` 每次复习都会被刷新 → 历史词被误判为「新词」。改为 `create_time < #{dayStart}` 且 `learned=1`（`create_time` 仅首次进入计划时写入）。
+
+- **G4 闸口实测（真实 MySQL + 真实 HTTP，非 mock）**：
+  - 打包 `target/vocab-backend-1.0.0.jar` 30,702,336 B；服务 8080 启动 4.827s，日志 ERROR=0。
+  - `g4-smoke.py` **26 PASS / 0 FAIL**（§2/§3/§4/§5 正常 + 错误路径，含无 token→401+1006、§3.1 计划窗口不漂移、§5.1 `mastered` 为 JSON 布尔）。
+  - `g4-crossday.py` **18 PASS / 0 FAIL**（自包含跨天）：D1 打卡 streak=1 → 回拨一天 → D2 昨天 20 词成复习词（overlap=20）、今天新词下一批（overlap=0）、计划 total=40、跨天 streak=2；直连 MySQL 确认 stage 1→2 间隔 3 天、3→4 跳 15 天、答错 stage 退回 1 且次日到期、stage=4 封顶。
+  - 数据完整性：`learned=1 && next_review_date IS NULL`=0；`stage` 越界=0；`mistake_entry`/`study_record`/`user_word_book` 三类唯一约束重复组=0。
+  - **红线**：`anime_tracker` 仍 20 表，未触碰。
+  - 全量回归 `mvn -o test` → **231 tests, 0 failures, 0 errors**。详见 `research/07-g4-gate-record.md`。
+
+> ⚠ 经验教训（夹具错误，非产品缺陷）：`study_record.study_date` 与 `check_in_date`
+> 在真实数据里**恒等**（打卡时同时写入），跨天夹具回拨日期必须**成对回拨**；
+> 只改其一会造成 `lastCheckInDate` 的假失败。
+
+## 8. AI 中转与降级（阶段闸口 G5：ai-service 未启动时降级路径全绿）—— **已完成（250 测试全绿；G5 已过，`45eb7d8`）**
+
+31. [x] `AiService`：`example` / `explain` / `report`，各自超时 15/30/60s（`RestTemplateBuilder` 每次构造专用实例）
+32. [x] `AiMetrics`：内存计数器 + 环形降级事件队列（容量 100）
+33. [x] `AiController` + DTO
+34. [x] **`example` 降级不抛异常**（HTTP 200 + `code:"0"` + `degraded:true` + `word.example`）——代码中加显式注释
+35. [x] `report` 前置：学习天数 < 3 → 5003 且**不发起 HTTP**
+36. [x] `explain` 降级 → 抛 5001/5002
 
 **验证（关键闸口）**：
-- [ ] 确保 ai-service **未启动**，跑：
-  - `POST /api/client/ai/example` → `code:"0"`、`degraded:true`、`example` 非空（来自词库）
-  - `POST /api/client/ai/explain` → `code:"5002"`
-  - `POST /api/client/ai/report`（学习天数 <3）→ `code:"5003"`
-  - `POST /api/client/ai/report`（学习天数 ≥3）→ `code:"5002"`
-- [ ] **同时**验证学习/打卡/复习完全不受影响（重跑阶段 7 的链路）
-- [ ] `AiServiceTest`：mock RestTemplate 抛 `ResourceAccessException`（超时）与 500，断言降级行为
+- [x] 确保 ai-service **未启动**，跑：
+  - `POST /api/client/ai/example` → `code:"0"`、`degraded:true`、`example` 非空（来自词库）✅
+  - `POST /api/client/ai/explain` → `code:"5002"` ✅（连接被拒属「服务异常」非超时）
+  - `POST /api/client/ai/report`（学习天数 <3）→ `code:"5003"` ✅
+  - `POST /api/client/ai/report`（学习天数 ≥3）→ `code:"5002"` ✅
+- [x] **同时**验证学习/打卡/复习完全不受影响（重跑阶段 7 的 `g4-smoke.py` → 26 PASS）
+- [x] `AiServiceTest`：**用真实对端而非 Mock 伪造故障**——`127.0.0.1:1`（连接被拒→5002）、`SilentHttpServer`（接受连接但永不响应→真实读超时→5001）、`StubAiServer`（真实 HTTP 校验字段名）。Mock 复现不出真实异常类型。
 
-## 9. 统计模块（阶段闸口：SQL 聚合正确，无内存加载）
+**阶段 8 实施记录（已完成，250 测试全绿；G5 已过）**：
 
-37. [ ] `StatsMapper.xml`：热力图按 `check_in_date` 聚合近 12 周；掌握度按天聚合近 30 天
-38. [ ] `StatsService`：补零日期序列（84 天连续）、`level` 分档（`0/1–10/11–20/21+`）、`masteryRate` 取整
-39. [ ] `StatsController` + DTO
+- **产出文件**：`dto/request/{AiExampleRequest,AiExplainRequest}`；`dto/response/{AiExampleResponse,AiExplainResponse,AiReportContent,AiReportResponse}`；`ai/{AiMetrics,AiCallException,AiServiceClient}` + `ai/dto/` 6 个内部调用 DTO；`service/AiService` + `impl/AiServiceImpl`；`controller/AiController`；测试类 `AiServiceImplTest`(13) / `AiControllerIntegrationTest`(6) + 测试支撑 `SilentHttpServer` / `StubAiServer`。`Constants` 增 `REPORT_RECENT_DAYS=14` / `REPORT_TOP_MISTAKES=10`。
+- **修 1 个真缺陷（测试先失败）**：`AiServiceClient#isTimeout()` 原只判 `java.net.SocketTimeoutException`。实测 Spring Boot 3.5 默认 `JdkClientHttpRequestFactory` 抛的是 `java.net.http.HttpTimeoutException`，与前者是**兄弟类（互不继承）** → **生产默认配置下所有真实超时都会被误判为 5002**。修复为同时判两类超时，并加 Javadoc「超时判定的唯一真相源」。回归防护：`explainThrows5001OnRealTimeout` + `explainThrows5002WhenServiceDown`。
+- **G5 闸口实测（ai-service 刻意未启动 + 真实 MySQL + 真实 HTTP）**：
+  - 打包 `target/vocab-backend-1.0.0.jar` 30,728,971 B；服务 8080 启动 6.392s，ERROR=0；`netstat` 确认无 8000/8001 监听。
+  - `g5-smoke.py` **24 PASS / 0 FAIL**（A/B/C/D 四组：example 降级不报错、explain→5002、report 天数<3→5003、AI 不可用不影响打卡/学习/复习）。
+  - 真实超时路径：`silent-ai-server.py`（8000 端口只监听不响应）+ 后端压短超时 1200ms → `explain` 得 **5001**（非 5002），日志 `WARN AI 降级 feature=explain reason=TIMEOUT`。
+  - 敏感信息核查：AppSecret / MySQL 密码 / AppID / JWT 明文密钥 / 用户明文密码 全 0 命中。
+  - 全量回归 `mvn -o test` → **250 tests, 0 failures, 0 errors**。详见 `research/08-g5-stage8-ai-review.md`。
+- **遗留待办（非本阶段引入，记入阶段 11）**：`application.yml` 生产默认 `com.vocab.mapper: DEBUG` 会打印 `password_hash` 的 BCrypt 哈希 → 生产默认改 `INFO`，`mapper` DEBUG 仅保留在本地 profile。
+- **范围澄清**：`ai-stats` 管理端点**未在本阶段开工**，判定属阶段 10（见 §10 第 45 项）。
+
+## 9. 统计模块（阶段闸口：SQL 聚合正确，无内存加载）—— **已完成（277 测试全绿，`a8be043`）**
+
+37. [x] `StatsMapper.xml`：热力图按 `check_in_date` 聚合近 12 周；掌握度按天聚合近 30 天
+38. [x] `StatsService`：补零日期序列（84 天连续）、`level` 分档（`0/1–10/11–20/21+`）、`masteryRate` 取整
+39. [x] `StatsController` + DTO
 
 **验证**：
-- [ ] 造多天数据后，`GET /stats/heatmap` 返回 84 个点、日期连续、`level` 与 `wordCount` 匹配分档
-- [ ] `GET /stats/mastery?days=30` 返回 30 个点，`masteryRate` 与手工 SQL 计算一致
-- [ ] 确认 `StatsMapper.xml` 中**没有**加载原始记录到 Java 的写法
+- [x] 造多天数据后，`GET /stats/heatmap` 返回 84 个点、日期连续、`level` 与 `wordCount` 匹配分档（边界值 1/10/11/20/21 逐一验证）
+- [x] `GET /stats/mastery?days=30` 返回 30 个点，`masteryRate` 与手工 SQL 计算一致
+- [x] 确认 `StatsMapper.xml` 中**没有**加载原始记录到 Java 的写法（`GROUP BY` 后 Java 只做「补零 + 分档」）
 
-## 10. 管理模块（阶段闸口：先改契约文档，再改代码）
+**阶段 9 实施记录（已完成，277 测试全绿）**：
 
-40. [ ] **先回写 `docs/接口详细设计.md`**：
+- **产出文件**：`dto/response/{HeatmapResponse,MasteryResponse}`；`common/MasteryRates`（**唯一真相源**：`percent(mastered,total)`，`total<=0 → 100`；统计曲线 §7.2 与 AI 报告 §9.3 共用，`AiServiceImpl#buildStudyStats` 一并改调它）；`service/StatsService` + `impl/StatsServiceImpl`（只做「SQL 聚合 + Java 补零/分档」）；`controller/StatsController`；`Constants` 增 `DEFAULT_HEATMAP_WEEKS=12` / `DEFAULT_MASTERY_DAYS=30` / `MAX_HEATMAP_WEEKS=52` / `MAX_MASTERY_DAYS=365`；测试 `StatsServiceImplTest`(14) / `StatsControllerIntegrationTest`(9) / `MasteryRatesTest`(4)。
+- **修 1 个真问题（规则一致性违反）**：`StatsMapper.xml#selectMasteryDaily` 原用 `DATE(create_time)`——**MySQL 专有函数**，违反「时间边界由 Java 传参」红线（同文件头注释自己就声明了该规则；H2 `MODE=MySQL` 恰好支持 `DATE()`，故测试全绿而漏检）。改为 SQL-92 `CAST(create_time AS DATE)`。
+- **实测**：`stage9-stats-smoke.py` **29 PASS / 0 FAIL**（真实 MySQL 8.4.9 + 真实 HTTP，自包含，只造 `stage9*` 用户）；直连 pymysql 验证 `CAST(create_time AS DATE)` 在 MySQL 8.4.9 正确返回日期；回归 `g4-smoke.py` 26 PASS / `g4-crossday.py` 18 PASS / `g5-smoke.py` 24 PASS，全 0 FAIL；全量 `mvn -o test` → **277 tests, 0 failures, 0 errors**。**红线** `anime_tracker` 仍 20 表。详见 `research/09-g6-stage9-stats-review.md`。
+
+## 10. 管理模块（阶段闸口 G6：先改契约文档，再改代码）—— **G6 已过（`29e8e5f`）；代码进行中**
+
+40. [x] **先回写 `docs/接口详细设计.md`**：
     - §8 新增 8.8 `GET /api/admin/books`、8.9 `DELETE /api/admin/books/{bookId}`、8.10 `GET /api/admin/monitor/ai-stats`（含字段表与示例）
     - §10 变更记录新增 V1.1 行（说明补齐的管理端接口 + `word_progress` 表 + `study_record` 加固唯一索引）
     - 单独提交：`docs(contract): 补齐管理端接口并记录 word_progress 偏离`
+    - **实际范围**：`docs/接口详细设计.md` V1.0→V1.1（20 处替换，390→498 行）+ `docs/S3-软件概要设计说明书-正文.md` V1.3（5 处替换）。落盘脚本 `.tmp/g6_contract.py` + `.tmp/g6_s3.py`，**每处断言「恰好命中一次」**（文本漂移即 `FAIL ... 命中 N 次` 并 `exit(1)`），避免静默漏改。
+    - 提交 `29e8e5f`（**仅 2 文件**，用 `git add --pathspec-from-file=.tmp/g6_paths.txt` 精确 add）。
 41. [ ] `WordBookService.import(multipart)`：解析计数 → `saveBatch` → 校正 `word_count` → `{bookId, success, skipped}`；整体非法 → 2004
 42. [ ] `AdminWordController`：分页查询（bookId/keyword）、新增（`wordCount+1`）、修改、删除（逻辑删除，`wordCount−1`）
 43. [ ] `AdminUserController`：分页 + keyword 搜索、禁用/启用（**ADMIN 不可禁用 → 1005**）、操作 INFO 日志（操作者 id、动作、目标用户）
@@ -396,12 +447,23 @@ word 总行数: 22761 = 7508+5651+9602
 - [ ] 禁用某用户 → 该用户 token 立即 401；禁用 ADMIN → 1005
 - [ ] `ai-stats` 能看到阶段 8 产生的降级计数
 
-## 11. 收尾（阶段闸口：可交付）
+**阶段 10 已就位的前置条件**（编码前侦察结论，**尚未写任何阶段 10 新代码**）：
+- `JwtInterceptor` 管理端角色拦截**阶段 5 已落位**（`path.startsWith("/api/admin/") && role != ADMIN` → HTTP 403 + 1007），`JwtInterceptorIntegrationTest` 已覆盖 403+1007 与 ADMIN 放行（落 404）；本阶段**无需改动拦截器**，只需建 Controller 端点。
+- `WordBookService` 三个管理端方法已占位待接 Controller：`adminListBooks()` / `importBook(InputStream,name,category)` / `deleteBook(Long)`。
+- 契约口径已冻结于 V1.1 §8（10 接口 = 7 契约原稿 + 3 补齐），编码严格照此执行。
+- 尚需新建：`dto/request/{WordUpsertRequest,UserStatusRequest}`、`dto/response/{AdminUserResponse,AiStatsResponse}`、`service/AdminService` + `impl/AdminServiceImpl`、`controller/admin/` 四个 Controller。
+- 冒烟脚本宜用独立前缀（如 `admin*` / `g6*`），只创建/清理自己的测试用户。
+
+## 11. 收尾（阶段闸口 G7：可交付）—— **未开始**
 
 47. [ ] `backend/README.md`：环境要求、建库、脚本执行顺序、环境变量清单、种子导入、启动、自测方法
 48. [ ] `scripts/smoke-test.sh`：一键跑通全部接口断言（含降级路径）
 49. [ ] `mvn -q clean package` 全绿（含测试）
 50. [ ] 自查 `prd.md` 的**每一条**验收标准，逐条打勾
+
+> **阶段 11 额外待办**（阶段 8 G5 发现）：`application.yml` 生产默认
+> `com.vocab.mapper: DEBUG` 会打印 `password_hash` 的 BCrypt 哈希
+> → 生产默认改 `INFO`，`mapper` DEBUG 仅保留在本地 profile。
 
 ---
 
@@ -411,10 +473,10 @@ word 总行数: 22761 = 7508+5651+9602
 |---|---|---|
 | G1 ✅ | 阶段 1 后 | 建库与词库落盘完成，行数正确 |
 | G2 ✅ | 阶段 3 后 | 7 张表结构与 S3 §7 + design.md 一致 |
-| G3 | 阶段 6 后 | 三本词书计数 7508/5651/9602 严格一致 |
-| G4 | 阶段 7 后 | 核心闭环端到端跑通 + 算法单测通过 |
-| G5 | 阶段 8 后 | **降级路径在 ai-service 未启动时全绿**（一等约束） |
-| G6 | 阶段 10 前 | 契约文档已回写（先文档后代码，不可颠倒） |
+| G3 ✅ | 阶段 6 后 | 三本词书计数 7508/5651/9602 严格一致（已过，`e140517`） |
+| G4 ✅ | 阶段 7 后 | 核心闭环端到端跑通 + 算法单测通过（已过，`76cf216`） |
+| G5 ✅ | 阶段 8 后 | **降级路径在 ai-service 未启动时全绿**（一等约束）（已过，`45eb7d8`） |
+| G6 ✅ | 阶段 10 前 | 契约文档已回写（先文档后代码，不可颠倒）（已过，`29e8e5f`） |
 | G7 | 阶段 11 后 | 全部验收标准勾选，交付物齐全 |
 
 ## 验证命令速查
@@ -448,17 +510,13 @@ python .tmp/dbx.py dbx_execute_query '{"connection_name":"aivocab-root","databas
 
 ## 已知需后续同步的文档
 
-- [ ] S3 §7 表数 6 → 7（`word_progress`）
-- [ ] S3 §7.5 `study_record` 补加固唯一索引说明
-- [ ] S3 §7.1「关键索引」列补注：`user_word_book` 实际还有加固唯一索引
-      `uk_user_word_book_user_book`（S3 只列 `idx_user_id`、`idx_book_id`）
-- [ ] S3 §7.2 补注：`create_time` / `update_time` 不带数据库默认值，
-      由 MyBatis-Plus `MetaObjectHandler` 填充（S3 只写了字段，未规定默认值语义）
-- [ ] S3 §8.2 待确定问题登记 AI 供应商为 DeepSeek
-- [ ] `docs/接口详细设计.md` §8/§10（阶段 40 已完成）
-- [ ] **`docs/接口详细设计.md` §0 错误码表**：补 `1006/1007/9002/9003/9004`
-      及「HTTP 4xx 保留给路由层错误」的边界说明
-      → 详见 `research/01-contract-gaps-stage2.md`
+- [x] S3 §7 表数 6 → 7（`word_progress`）—— **已回写（S3 V1.3，`29e8e5f`）**，S3 L443 现为「核心表共 **7** 张」
+- [x] S3 §7.5 `study_record` 补加固唯一索引说明 —— 已并入 S3 V1.3 实现补充段（L445）
+- [x] S3 §7.1「关键索引」列补注 `uk_user_word_book_user_book` —— 已并入 S3 V1.3 实现补充段（L445）
+- [x] S3 §7.2 补注：`create_time` / `update_time` 不带数据库默认值，由 MyBatis-Plus `MetaObjectHandler` 填充 —— 已回写（S3 L445）
+- [ ] S3 §8.2 待确定问题登记 AI 供应商为 DeepSeek —— **仍待办**（S3 全文无 DeepSeek 字样）
+- [x] `docs/接口详细设计.md` §8/§10（阶段 40 已完成，`29e8e5f`）
+- [x] **`docs/接口详细设计.md` §0 错误码表**：补 `1006/1007/9002/9003/9004` 及「HTTP 4xx 保留给路由层错误」的边界说明 —— **已回写（V1.1）**，详见 `research/01-contract-gaps-stage2.md`
 
 > 说明：索引名**已回退为 S3 §7.1 原样**（G2 复核决策），故**不再属于**待同步项——
 > 脚本与 S3 已逐字一致（14/14 实测）。

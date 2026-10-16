@@ -187,3 +187,51 @@
 - 阶段 6 词库模块 + 种子导入（单一 parseLine 双入口、saveBatch 1000、导入后校正 word_count）→ 闸口 G3（7508/5651/9602 严格一致）
 - 阶段 7 学习/复习/错题核心闭环 → G4；阶段 8 AI 降级 → G5；阶段 9 统计（StatsMapper 已就位，补 Service/Controller）
 - 阶段 10 管理模块前必须 G6 回写契约：1006/1007/9002-9004 + JSR-310 格式注 + §8/§10 新接口 + S3 三条（表数 6→7、加固唯一索引、时间列 ORM 填充）
+
+
+## Session 3: backend 阶段 3+4：迁移脚本与实体/Mapper（G2 复核通过）
+<!-- trellis-session: v=2 fp=60523b6f771b8976 -->
+
+**Date**: 2026-10-16
+**Task**: backend 阶段 3+4：迁移脚本与实体/Mapper（G2 复核通过）
+**Branch**: `main`
+
+### Summary
+
+落地 V001/V002 迁移脚本（7 表，DDL 逐字照 S3 §7），完成 7 个实体 + 8 个 Mapper + StatsMapper.xml 聚合；G2 复核通过，56 测试全绿。
+
+### Main Changes
+
+- 阶段 3：`db/V001__init.sql`（6 表）+ `db/V002__word_progress.sql`（第 7 表）；
+  DDL **逐字照 S3 §7**，字段长度实测全落 S3 宽度内，索引名回退 S3 §7.1 原样。
+- **G2 决策**：时间列 `create_time`/`update_time` **不带数据库默认值**，统一交
+  MyBatis-Plus `MetaObjectHandler` 单套填充（避免「DB 默认值 + ORM 填充」两套时间源）。
+- 阶段 4：`entity/` 7 个 + `mapper/` 7 个 BaseMapper + `StatsMapper` +
+  `resources/mapper/StatsMapper.xml`（逐个查询手写 `deleted = 0`）；
+  `config/JacksonConfig` 补 JSR-310 全局格式 `yyyy-MM-dd HH:mm:ss` / `yyyy-MM-dd`。
+- 测试支撑：`test/resources/schema-h2.sql`（H2 2.3.232）、`test/resources/application-test.yml`。
+- **修 3 个真缺陷**：① JDBC URL `characterEncoding=utf8mb4` 非法（Connector/J 经
+  `Charset.forName` 解析）→ 三处改 `UTF-8`；② `StatsMapper.xml` 用 MySQL 专有
+  `DATE_SUB(CURDATE(), ...)` → 起点日期改由 Java 计算作 `since` 参数传入，
+  使 H2 测试与 MySQL 生产跑**同一份 SQL**；③ `JwtUtilTest#tamperedTokenReturnsNull`
+  是 flaky 测试（改签名段末字符有 ~6% 概率解码后字节不变）→ 改为篡改 payload 首字符。
+- **安全**：校验脚本初版把 DB 密码写成默认值（违反禁硬编码凭证红线）→ 改为无默认值 +
+  缺密码 fail-fast；该密码曾误入提交 `23720a3`，因无 remote 已 reset --soft 折叠重提 +
+  `reflog expire` + `gc prune`，全历史 `git grep` 三个敏感串 0 命中。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b3713dc` | chore(db): 阶段 3 迁移脚本 V001/V002 — 7 张表 |
+| `d2a1ece` | chore(db): G2 复核调整 — 索引名回退 S3 原样、时间列交由 ORM 填充 |
+| `d8581ac` | feat(backend): 阶段 4 实体与 Mapper — 7 表映射 + 统计聚合 |
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 阶段 5 认证模块（AuthService + UserStatusValidator 真实实现）
