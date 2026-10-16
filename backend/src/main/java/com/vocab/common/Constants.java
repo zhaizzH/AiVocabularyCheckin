@@ -123,6 +123,16 @@ public final class Constants {
     /** 生成学习报告所需的最少学习天数（需求清单 §4.3）。 */
     public static final int MIN_REPORT_STUDY_DAYS = 3;
 
+    /**
+     * 计算打卡率所用的近期窗口（天）。
+     *
+     * <p>契约未规定窗口长度，取与报告文案「近两周」一致的 14 天。
+     */
+    public static final int REPORT_RECENT_DAYS = 14;
+
+    /** 学习报告中引用的错题词数量上限。 */
+    public static final int REPORT_TOP_MISTAKES = 10;
+
     /** 判断昵称/头像是否合法。 */
     public static boolean isValidAvatar(String avatar) {
         return avatar != null && AVATARS.contains(avatar);

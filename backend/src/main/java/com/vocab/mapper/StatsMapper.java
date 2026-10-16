@@ -72,6 +72,31 @@ public interface StatsMapper {
     Integer countCheckInDays(@Param("userId") Long userId);
 
     /**
+     * 某日（含）以来的打卡天数——AI 学习报告的 {@code checkInRate} 分子。
+     *
+     * <p>为什么不像 {@link #countCheckInDays} 那样取全部历史：
+     * 「打卡率」是<b>近期坚持度</b>，用全部历史会把一年前的勤勉算进来，
+     * 新用户和老用户失去可比性。契约未规定窗口，取与报告文案
+     * 「近两周」一致的 14 天（{@code Constants.REPORT_RECENT_DAYS}）。
+     *
+     * @param since 起始日期（含），由 Service 用 Clock 计算
+     */
+    Integer countCheckInDaysSince(@Param("userId") Long userId,
+                                  @Param("since") LocalDate since);
+
+    /**
+     * 错题最多的前 N 个单词原文（AI 学习报告的 {@code topMistakeWords}）。
+     *
+     * <p>按 {@code wrong_count} 降序取词，供 AI 写「错题集中在…」。
+     * 只取单词字符串，不取释义（报告中只需要点名）。
+     *
+     * @param userId 用户 id
+     * @param limit  取前若干条（由 Service 传 {@code Constants.REPORT_TOP_MISTAKES}）
+     */
+    List<String> selectTopMistakeWords(@Param("userId") Long userId,
+                                       @Param("limit") int limit);
+
+    /**
      * 累计已学单词数：{@code word_progress} 中 {@code learned = 1} 的单词数。
      *
      * <p>唯一键是 {@code (user_id, word_id)}，故跨词书天然去重——

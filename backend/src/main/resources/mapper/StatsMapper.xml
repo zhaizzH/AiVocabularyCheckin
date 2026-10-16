@@ -89,6 +89,30 @@
           AND check_in_date IS NOT NULL
     </select>
 
+    <!-- 某日起的打卡天数（AI 报告的 checkInRate 分子），边界由 Java 传入 -->
+    <select id="countCheckInDaysSince" resultType="int">
+        SELECT COUNT(DISTINCT check_in_date)
+        FROM study_record
+        WHERE user_id = #{userId}
+          AND deleted = 0
+          AND check_in_date IS NOT NULL
+          AND check_in_date &gt;= #{since}
+    </select>
+
+    <!--
+      错题最多的前 N 个单词原文（AI 报告 topMistakeWords）。
+      JOIN word 取原文；LIMIT 由 Service 传入（LIMIT #{limit} 是参数绑定，非字符串拼接）。
+    -->
+    <select id="selectTopMistakeWords" resultType="java.lang.String">
+        SELECT w.word
+        FROM mistake_entry m
+        JOIN word w ON w.id = m.word_id AND w.deleted = 0
+        WHERE m.user_id = #{userId}
+          AND m.deleted = 0
+        ORDER BY m.wrong_count DESC, m.id ASC
+        LIMIT #{limit}
+    </select>
+
     <!-- 累计已学单词数：word_progress 中 learned=1 的词数（跨词书天然去重） -->
     <select id="countLearnedWords" resultType="int">
         SELECT COUNT(*)
