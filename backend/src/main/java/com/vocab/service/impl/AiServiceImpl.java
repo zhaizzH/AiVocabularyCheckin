@@ -13,6 +13,7 @@ import com.vocab.ai.dto.AiReportCallResponse;
 import com.vocab.common.BizException;
 import com.vocab.common.Constants;
 import com.vocab.common.ErrorCode;
+import com.vocab.common.MasteryRates;
 import com.vocab.dto.response.AiExampleResponse;
 import com.vocab.dto.response.AiExplainResponse;
 import com.vocab.dto.response.AiReportContent;
@@ -240,12 +241,11 @@ public class AiServiceImpl implements AiService {
         // 打卡率 = 近两周打卡天数 / 近两周总天数。
         int checkInRate = (int) Math.round(recentCheckInDays * 100.0 / Constants.REPORT_RECENT_DAYS);
 
-        int totalMistakes = safeInt(statsMapper.countTotalMistakes(userId));
-        int masteredMistakes = safeInt(statsMapper.countMasteredMistakes(userId));
-        // 掌握度 = 已掌握错题 / 总错题；无错题时视为 100（没有未掌握的薄弱点）。
-        int masteryRate = totalMistakes == 0
-                ? 100
-                : (int) Math.round(masteredMistakes * 100.0 / totalMistakes);
+        // 掌握度公式与统计模块共用 MasteryRates，避免两处口径漂移
+        // （前端会在统计页与报告里看到同一个数字，必须同源）。
+        int masteryRate = MasteryRates.percent(
+                safeInt(statsMapper.countMasteredMistakes(userId)),
+                safeInt(statsMapper.countTotalMistakes(userId)));
 
         List<String> topMistakeWords =
                 statsMapper.selectTopMistakeWords(userId, Constants.REPORT_TOP_MISTAKES);

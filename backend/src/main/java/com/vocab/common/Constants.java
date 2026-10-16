@@ -115,6 +115,19 @@ public final class Constants {
     /** 掌握度曲线默认天数（契约 §7.2）。 */
     public static final int DEFAULT_MASTERY_DAYS = 30;
 
+    /**
+     * 热力图回溯周数上限（52 周 = 1 年）。
+     *
+     * <p>{@code weeks} 来自查询串，属用户可控输入；无上限时
+     * {@code weeks=1000000} 会让 {@code StatsService} 在内存里构造
+     * 700 万个 {@code HeatmapDay} 对象——响应体也会大到无法传输。
+     * 上限不写进契约（契约只示范 12），但后端必须自我约束。
+     */
+    public static final int MAX_HEATMAP_WEEKS = 52;
+
+    /** 掌握度曲线回溯天数上限（365 天），理由同 {@link #MAX_HEATMAP_WEEKS}。 */
+    public static final int MAX_MASTERY_DAYS = 365;
+
     // ---------------- AI 监控 ----------------
 
     /** 降级事件环形队列容量。 */

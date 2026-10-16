@@ -39,6 +39,11 @@
         * reviewCount  = 当日 REVIEW 型记录数
         * mistakeCount = 当日新增错题数（按 mistake_entry.create_time 的日期）
         * masteryRate  = 由 Java 侧按「已掌握 / 总错题」统一计算（见 StatsService）
+
+      为什么用 CAST(... AS DATE) 而不是 MySQL 的 DATE()：
+        项目红线要求 SQL 不依赖 MySQL 专有日期函数（见本文件头注释）。
+        DATE() 是 MySQL 专有；CAST(x AS DATE) 是 SQL-92 标准写法，
+        MySQL 8 与 H2（MySQL 兼容模式）都支持，保证同一份 SQL 两边语义一致。
     -->
     <select id="selectMasteryDaily" resultType="com.vocab.dto.response.MasteryPoint">
         SELECT r.study_date AS `date`,
@@ -53,11 +58,11 @@
               AND study_date &gt;= #{since}
         ) r
         LEFT JOIN (
-            SELECT user_id, DATE(create_time) AS mistakeDate, COUNT(*) AS mistakeCount
+            SELECT user_id, CAST(create_time AS DATE) AS mistakeDate, COUNT(*) AS mistakeCount
             FROM mistake_entry
             WHERE user_id = #{userId}
               AND deleted = 0
-            GROUP BY user_id, DATE(create_time)
+            GROUP BY user_id, CAST(create_time AS DATE)
         ) m ON m.user_id = r.user_id AND m.mistakeDate = r.study_date
         GROUP BY r.study_date
         ORDER BY r.study_date ASC
