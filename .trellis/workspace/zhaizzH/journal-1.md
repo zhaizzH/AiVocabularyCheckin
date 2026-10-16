@@ -235,3 +235,58 @@
 ### Next Steps
 
 - 阶段 5 认证模块（AuthService + UserStatusValidator 真实实现）
+
+
+## Session 4: backend 阶段 6：词库模块 + 种子导入（G3 通过）
+<!-- trellis-session: v=2 fp=5c16acf603b75baf -->
+
+**Date**: 2026-10-16
+**Task**: backend 阶段 6：词库模块 + 种子导入（G3 通过）
+**Branch**: `main`
+
+### Summary
+
+词库四接口 + 种子导入落地：三本词书 22761 词入库，G3 闸口实测通过（7508/5651/9602 严格一致、二次运行幂等），143 测试全绿。
+
+### Main Changes
+
+- `WordImportService#parseLine(String, Long)` = **唯一映射实现**，种子导入与
+  JSONL 上传双入口共用；映射规则 `word`→`word` / `uk`→`phonetic` /
+  `translations` 拼「词性. 释义」→`translation` / `sentences[0]`→`example`。
+- `WordBookService` 新增 3 个管理端方法占位（阶段 10 接 Controller）：
+  `adminListBooks()` / `importBook(InputStream,name,category)` / `deleteBook(Long)`。
+- `VocabSeedRunner`（`@ConditionalOnProperty(vocab.seed=true)`）从
+  `data/vocab-source/` 读，按 `name+category` 幂等跳过，导入后断言行数 == 期望值。
+- **批量写入不用 `saveBatch`**：实测 MyBatis-Plus 3.5.9 的 `Db.saveBatch(coll, 1000)`
+  是**循环单条 insert**（字节码已核实），22761 行 = 22761 次往返。改为自写
+  `WordMapper#insertBatch` + XML 多行 `VALUES` 单语句（每批 1000）；XML 绕过
+  `MetaObjectHandler`，故显式 `NOW()` + `deleted=0`。详见 design.md §7.3。
+- **修 3 个真缺陷（均由测试先失败暴露）**：① 原实现先建词书再解析，整份文件全坏行抛
+  2004 后库里残留 0 词空壳词书 → 改为**惰性扫描到首条合法行才建词书**
+  （`@Transactional` 只在调用方也开事务时回滚）；② `ImportResult.success` 与
+  `word_count` 不同源 → 统一取 `correctWordCount()`；③ 测试夹具未设
+  `word_book.word_count`（实现侧无缺陷）。
+- 逐行导入**不做单词去重**（需求要求 `word_count` == 文件行数，源数据本身含重复词）。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e140517` | feat(backend): 阶段 6 词库模块 + 种子导入（G3 通过） |
+
+### Testing
+
+- [OK] mvn -o clean test → 143 tests, 0 failures, 0 errors（+25）
+- [OK] G3 闸口实测：word_book 3 行、word 22761 行、每本 COUNT(*) 与 word_count 全等、时间列 NULL=0
+- [OK] 二次运行 --vocab.seed=true 幂等跳过，行数不变
+- [OK] HTTP 冒烟 20 用例全过（真实 MySQL + curl）
+- [OK] 红线 anime_tracker 仍 20 表未触碰
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 阶段 7 学习/复习/错题核心闭环 → G4
