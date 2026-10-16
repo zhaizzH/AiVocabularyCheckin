@@ -108,4 +108,20 @@
           AND learned = 1
     </select>
 
+    <!--
+      一次性取每本词书的已学词数（契约 §2.1 列表页），避免 N+1。
+      只返回有已学词的词书；无记录的词书由 Service 兜底为 0。
+      别名沿用下划线风格，与其它列一致（MyBatis 自动映射对列名大小写不敏感，
+      且 map-underscore-to-camel-case 会把 learned_count 映射到 learnedCount）。
+    -->
+    <select id="selectLearnedCountByBook" resultType="com.vocab.dto.response.BookLearnedCount">
+        SELECT book_id   AS book_id,
+               COUNT(*)  AS learned_count
+        FROM word_progress
+        WHERE user_id = #{userId}
+          AND deleted = 0
+          AND learned = 1
+        GROUP BY book_id
+    </select>
+
 </mapper>

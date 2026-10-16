@@ -1,5 +1,6 @@
 package com.vocab.mapper;
 
+import com.vocab.dto.response.BookLearnedCount;
 import com.vocab.dto.response.HeatmapDay;
 import com.vocab.dto.response.MasteryPoint;
 import org.apache.ibatis.annotations.Mapper;
@@ -84,4 +85,19 @@ public interface StatsMapper {
      * @param bookId 词书 id
      */
     Integer countLearnedWordsInBook(@Param("userId") Long userId, @Param("bookId") Long bookId);
+
+    /**
+     * 一次性取「该用户在每本词书内已学词数」——契约 §2.1 列表页的 {@code learnedCount}。
+     *
+     * <p><b>为什么不做成 {@link #countLearnedWordsInBook} 的循环调用</b>：
+     * 列表页有 N 本词书就该发出 N 次 COUNT（典型 N+1）。
+     * 一次 {@code GROUP BY book_id} 拿到全部，SQL 次数恒为 1。
+     * 结果由 Service 转成 {@code bookId → count} 的 Map 填充。
+     *
+     * <p>只返回「有已学词」的词书——无记录的词书在 Map 中查不到，
+     * Service 侧 {@code getOrDefault(bookId, 0)} 兜底为 0。
+     *
+     * @param userId 用户 id
+     */
+    List<BookLearnedCount> selectLearnedCountByBook(@Param("userId") Long userId);
 }

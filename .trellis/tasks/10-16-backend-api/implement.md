@@ -262,23 +262,73 @@ curl -s -X POST localhost:8080/api/client/auth/register -H 'Content-Type: applic
   - 红线自查：`main` 下无 `System.out` / `printStackTrace` / 硬编码凭证；`application.yml` 中 appid/secret 均为 `${WX_APPID:}` / `${WX_SECRET:}` 占位符；真实凭证仅在 `application-local.yml`（`.gitignore` 已验证排除）；
   - 红线比对：`anime_tracker` 仍 20 表，`ai_vocab` 7 表，冒烟数据已清理（`user` 表回到 0 行），**无非 BCrypt 密码哈希**。
 
-## 6. 词库模块 + 种子导入（阶段闸口：三本词书入库且计数正确）
+## 6. 词库模块 + 种子导入（阶段闸口 G3：三本词书入库且计数正确）—— **已完成**
 
-18. [ ] `WordImportService.parseLine`（design.md §7.1，**唯一映射实现**）
-19. [ ] `WordBookService`：`listBooks(category, userId)`（含 `selected` / `learnedCount`）、`bookDetail(bookId, page)`、`select`、`deselect`
-20. [ ] `BookController` + response DTO
-21. [ ] `VocabSeedRunner`（profile/参数控制的自举导入，从 `data/vocab-source/` 读，`saveBatch` 分批 1000）
-22. [ ] 执行种子导入
+18. [x] `WordImportService.parseLine(String, Long)`（design.md §7.1，**唯一映射实现**，双入口共用）
+19. [x] `WordBookService`：`listBooks(category, userId)`（含 `selected` / `learnedCount`）、
+    `bookDetail(bookId, page, size)`、`select`、`deselect` + 3 个管理端方法占位（阶段 10 接 Controller）
+20. [x] `BookController`（`/api/client/books`）+ `BookResponse` / `BookDetailResponse` /
+    `WordResponse` / `BookSelectResponse` / `BookLearnedCount` DTO
+21. [x] `VocabSeedRunner`（`@ConditionalOnProperty(vocab.seed=true)`，从 `data/vocab-source/` 读，
+    按 name+category 幂等跳过，导入后断言行数 == 期望值）
+22. [x] 执行种子导入（真实 MySQL）
 
-**验证**（DBX MCP）：
-```sql
-SELECT b.name, b.category, b.word_count, (SELECT COUNT(*) FROM word w WHERE w.book_id=b.id AND w.deleted=0) actual
-FROM word_book b;
+**实施调整（相对原计划）**：
+- 批量写入**不用 `saveBatch`**：实测 MyBatis-Plus 3.5.9 的
+  `Db.saveBatch(coll, 1000)` 是**循环单条 insert**（字节码已核实），
+  22761 行 = 22761 次往返。改为自写 `WordMapper#insertBatch` + XML
+  多行 `VALUES` 单语句（每批 1000）。XML 绕过 `MetaObjectHandler`，
+  故显式 `NOW()` + `deleted=0`。详见 design.md §7.3。
+- **词书创建时机下移**：`importFromStream` 延迟到首个合法行才 `insert` 词书。
+  原实现先建词书再解析，导致「整份文件全坏行」抛 2004 后
+  库里残留一本 0 词空壳（`@Transactional` 只在调用方也开事务时回滚）。
+- `correctWordCount` 用 `COUNT(*)` 回写，`ImportResult.success` 同源取该值。
+- 逐行导入**不做单词去重**（需求要求 `word_count` == 文件行数；源数据本身含重复词）。
+- 列表 `learnedCount` / `selected` 各一次查询取全，规避 N+1（design.md §7.5）。
+
+**验证（真实 MySQL + 真实 HTTP，非 mock；实测记录）**：
+
+*G3 闸口 — 种子导入（`--vocab.seed=true`）*：
 ```
-- 三行 `word_count == actual`，分别为 7508 / 5651 / 9602
-- `SELECT word, phonetic, translation, example FROM word WHERE book_id=? LIMIT 5` 抽查映射正确（多义项拼接含 `；`）
-- `GET /api/client/books` / `?category=CET4` / `/{id}?page=1&size=20` 返回结构符合契约
-- select 两次 → 第二次 2003；deselect 未选的 → 2002
+word_book: (6,'四级核心词汇','CET4',7508,0) (7,'六级核心词汇','CET6',5651,0) (8,'考研核心词汇','KAOYAN',9602,0)
+每本 COUNT(*) 实际单词数:  6→7508   7→5651   8→9602       （word_count == actual，全部一致）
+word 总行数: 22761 = 7508+5651+9602
+```
+- **幂等**：第二次运行输出「种子词书已存在，跳过」×3，`word_book` 仍为 3 行、`word` 仍为 22761 行。
+- **时间列**：`SELECT COUNT(*) FROM word WHERE create_time IS NULL OR update_time IS NULL` → **0**
+  （证明 XML 里的显式 `NOW()` 生效）。
+- **映射抽查**：`abruptly / ə'brʌptlɪ / adv. 突然地 / "The path ends off abruptly."`；
+  `definition` / `audio_url` 全为 NULL（一期留空）；空音标数 CET4 66 / CET6 50 / KAOYAN 17、
+  空例句 164/131/205，与源文件缺失统计逐一对上。
+- **红线**：`anime_tracker` 仍 20 表，全程未触碰。
+
+*契约 §2 四接口端到端（真实 MySQL，curl）*：
+
+| 用例 | 结果 |
+|---|---|
+| `GET /books` 未选时 | 三本全返回，`selected=false` / `learnedCount=0` ✅ |
+| `GET /books?category=CET6` | 只返回 1 本 CET6 ✅ |
+| `GET /books?category=cet4` | 小写同样命中（大小写不敏感）✅ |
+| `GET /books?category=TOEFL` | `code=0` + `data=[]`（非法分类不报错，为空集）✅ |
+| `GET /books/{id}?page=1&size=3` | `total=5651 / page=1 / size=3`，3 条词数据完整 ✅ |
+| `GET /books/999999` | `2001 词书不存在` ✅ |
+| `POST /books/7/select` | `{bookId:7, selected:true}` ✅ |
+| 重复 select | `2003 词书已加入` ✅ |
+| select 不存在的书 | `2001` ✅ |
+| select 后列表 | 该书 `selected=true` ✅ |
+| 造 1 条 `word_progress` 后列表 | `learnedCount=1` ✅（`GROUP BY` 聚合生效） |
+| `DELETE /books/7/select` | `{selected:false}` ✅ |
+| 再次 deselect | `2002 未选择该词书` ✅ |
+| **移出词书后历史保留** | `word_progress` 仍 1 行、`user_word_book` 关联行已删 ✅（契约明文要求） |
+| 分页边界 `page=0&size=0` | 回落 `page=1 size=20` ✅ |
+| 分页 `size=3000` | 被 `maxLimit=500` 截为 500 ✅ |
+| `page=99999` | `total` 正确、`list=[]` ✅ |
+| 普通用户访问 `/api/admin/**` | HTTP 403 + `1007 无权访问该资源` ✅ |
+| 无 token | HTTP 401 + `1006 登录状态已失效，请重新登录` ✅ |
+| 中文 UTF-8 逐字节校验 | 响应中词书名 hex 与 `四级核心词汇` 的 UTF-8 编码**完全相同** ✅ |
+
+*测试*：`mvn -o clean test` → **143 tests, 0 failures, 0 errors**（阶段 5 为 118，本阶段 +25：
+`WordImportServiceImplTest` 11 例 + `BookControllerIntegrationTest` 14 例）。
 
 ## 7. 学习 + 复习 + 错题（阶段闸口：核心闭环端到端跑通）
 

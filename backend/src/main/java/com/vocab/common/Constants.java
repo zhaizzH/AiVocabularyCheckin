@@ -78,6 +78,35 @@ public final class Constants {
     /** 错题来源：复习中答错。 */
     public static final String SOURCE_REVIEW = "REVIEW";
 
+    // ---------------- 词库 --------------
+
+    /** 词书分类白名单（契约 §2.1 / §8.1）。 */
+    public static final List<String> BOOK_CATEGORIES = Collections.unmodifiableList(
+            Arrays.asList("CET4", "CET6", "KAOYAN"));
+
+    /** 批量写入批大小（database-guidelines.md：批量操作用 saveBatch，禁止循环单条插入）。 */
+    public static final int SAVE_BATCH_SIZE = 1000;
+
+    /**
+     * 列宽上限（对应 S3 §7.2 表 7.2/7.3 的 VARCHAR 宽度）。
+     *
+     * <p>{@code word} / {@code phonetic} = 100、{@code translation} = 255、{@code example} = 500。
+     * 超宽行直接跳过并计入 {@code skipped}，而不是交给数据库抛
+     * {@code Data too long for column} ——后者会中断整批 {@code saveBatch}
+     * （本机 {@code sql_mode} 含 {@code STRICT_TRANS_TABLES}，超宽即报错）。
+     * 实测源数据最大值 word=18 / uk=58 / translation=126 / example=200，全部落在上限内。
+     */
+    public static final int WORD_MAX_LENGTH = 100;
+    public static final int PHONETIC_MAX_LENGTH = 100;
+    public static final int TRANSLATION_MAX_LENGTH = 255;
+    public static final int EXAMPLE_MAX_LENGTH = 500;
+
+    /** 词书名称最大长度（S3 表 7.2 {@code name VARCHAR(100)}）。 */
+    public static final int BOOK_NAME_MAX_LENGTH = 100;
+
+    /** 词书简介最大长度（S3 表 7.2 {@code description VARCHAR(500)}）。 */
+    public static final int BOOK_DESCRIPTION_MAX_LENGTH = 500;
+
     // ---------------- 统计 ----------------
 
     /** 热力图默认周数（契约 §7.1）。 */

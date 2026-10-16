@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.vocab.mapper.WordMapper">
+
+    <!--
+      词库导入专用：多行 VALUES 批量插入。
+
+      不用 `saveBatch`：其语义是「循环调用单条 insert」（见 3.5.9 字节码：
+      saveBatch -> saveBatch(collection, 1000) -> 逐条 insert），对 22761 行车库
+      意味着 22761 次数据库往返。本语句一条 SQL 插 N 行，才是真正的一次往返。
+
+      时间列：`create_time` / `update_time` 无 DB 默认值（G2 决策：时间列不带
+      DEFAULT，填充唯一来源是 MyBatis-Plus MetaObjectHandler）。本语句绕过了
+      MetaObjectHandler，因此必须显式写 NOW()——这是 design.md §3.5 约束的兑现点。
+      `deleted` 也显式置 0：`@TableLogic` 的默认值只在 MP 自己拼 SQL 时生效。
+    -->
+    <insert id="insertBatch" parameterType="java.util.List">
+        INSERT INTO `word`
+            (`book_id`, `word`, `phonetic`, `translation`,
+             `definition`, `example`, `audio_url`,
+             `deleted`, `create_time`, `update_time`)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.bookId}, #{item.word}, #{item.phonetic}, #{item.translation},
+             #{item.definition}, #{item.example}, #{item.audioUrl},
+             0, NOW(), NOW())
+        </foreach>
+    </insert>
+
+</mapper>

@@ -410,29 +410,109 @@ JwtInterceptor:
 
 ## 7. 词库导入设计
 
+> **本节的规则已在阶段 6 落地并被测试锁定**；下面各条同时标注了「实际实现位置」与
+> 「为什么这样做」。凡实现与本节早期草稿不一致之处，均以本节为准（已回改）。
+
 ### 7.1 解析（单一实现，双入口复用）
 
-`WordImportService.parseLine(String json)` → `Word 或 null（跳过）`：
+`WordImportService.parseLine(String jsonLine, Long bookId)` → `Word 或 null（跳过行）`
 
 ```
-解析 JSON；校验 word 非空（否则跳过）
-phonetic   = uk（缺失则空）
-translation = translations 逐项 "{type}. {translation}"，用 "；" 连接
-example    = sentences[0].sentence（缺失则空）
+解析 JSON（Jackson readTree；解析失败 → null）
+word      = node.word        （缺失/全空白 → null，唯一必填字段）
+phonetic  = node.uk          （缺失 → ""）
+translation: node.translations[] 逐项 "{type}. {translation}"，用 "；" 连接
+             （type 缺失时仅保留 translation，避免孤立的 ". "）
+example   = node.sentences[0].sentence（缺失/空数组 → ""）
+definition / audioUrl 一期留空（源数据无英文释义；需求清单 §7.4 不做发音）
+防御性列宽校验：word>100 / phonetic>100 / translation>255 / example>500 → null
 ```
+
+实现位置：`service/impl/WordImportServiceImpl#parseLine`（**全项目唯一映射实现**）。
+测试：`service/WordImportServiceImplTest`（11 例，含真实源数据样例行）。
+
+**关键取舍：缺字段填空串而非 null。** 三个字段在库里都是 `NULL DEFAULT NULL`，
+但若把 null 传到 DTO，前端卡片就要处处判空（"phonetic 有值才显示音标"）。
+统一填空串后，前端逻辑退化为「非空才渲染」，且不会出现 JSON 里 `null` 与 `""` 两种空态。
+
+**同词多义项（重要）**：源文件由多份数据合并，**含重复单词行且释义各异**
+（实测 CET4 7508 行仅 4544 个不同单词，如 `absorb` 出现 3 次）。
+需求要求 `word_count` 严格等于**文件行数**，故**逐行入库、不做单词去重**。
+重复词各自独立成为不同的 `word_id`，`word_progress` 的唯一键是
+`(user_id, word_id)`，因此学习进度天然相互独立，不会互相覆盖。
 
 ### 7.2 两个入口
 
-| 入口 | 用途 |
-|---|---|
-| `POST /api/admin/books/import`（multipart） | 管理端上传，返回 `{bookId, success, skipped}` |
-| `VocabSeedRunner`（`CommandLineRunner`，profile 控制） | 一次性种子导入，从 `data/vocab-source/*.jsonl` 读 |
+| 入口 | 实现 | 用途 |
+|---|---|---|
+| `POST /api/admin/books/import`（multipart） | `WordImportService#importFromStream(InputStream, name, category)` | 管理端上传，返回 `{bookId, success, skipped}` |
+| `VocabSeedRunner`（`CommandLineRunner`，`@ConditionalOnProperty(vocab.seed=true)`） | `WordImportService#importLines(Stream<String>, bookId)` | 一次性种子导入，从 `data/vocab-source/*.jsonl` 读 |
 
-两者**必须调用同一个 `parseLine`**。种子导入用 `@Profile("seed")` 控制，避免每次启动重跑；或做成独立 `mvn spring-boot:run -Dspring-boot.run.arguments=--seed`。
+两者**必须调用同一个 `parseLine`**——`importFromStream` 与 `importLines`
+都汇聚到它，不存在第二份字段映射代码。
+
+**为什么用 `@ConditionalOnProperty` 而不是 `@Profile`**：种子导入是「一次性运维动作」，
+不是一种运行环境。用 `--vocab.seed=true` 参数控制更贴合语义，也避免
+「seed profile 与 local profile 不能同时激活」这类无意义的组合限制。
+
+**种子导入的幂等与门禁**（`VocabSeedRunner`）：
+- 同名（name+category）词书已存在则**跳过**——误跑两次不会得到 6 本词书。
+- 每本导入后**断言行数 == 期望值（7508/5651/9602）**，不等则抛异常并让进程以非零码退出。
+  这正是 G3 闸口的自动化形态：词库是本项目的数据基石，静默少几行会让
+  「7508 词的词书」变成不可信的中间态。
+- 单本失败不阻断其余两本，最后统一汇总失败项再抛异常（避免「日志有 ERROR、退出码却是 0」）。
 
 ### 7.3 批量写入
 
-`saveBatch(list, 1000)` 分批，避免单条插入（规范要求）。导入完成后 `UPDATE word_book SET word_count = (SELECT COUNT(*) ...)` 校正计数（不靠自增累加，避免漂移）。
+**`saveBatch` 的语义澄清（修正早期草稿）**：MyBatis-Plus 的
+`Db.saveBatch(list, 1000)` / `ServiceImpl.saveBatch` 内部是**循环调用单条 `insert`**
+（3.5.9 字节码已核实：`saveBatch -> saveBatch(c, 1000) -> 逐条 insert`）。
+对 22761 行的词库这意味着 22761 次数据库往返。
+
+因此本项目改写为**多行 VALUES 单语句批量插入**：
+`mapper/WordMapper#insertBatch(List<Word>)` + `resources/mapper/WordMapper.xml`，
+每批 1000 行 → 一条 `INSERT INTO word (...) VALUES (...),(...),...`。
+这才是 database-guidelines.md「禁止循环单条插入」的实质要求。
+
+**为什么这个 XML 必须显式写 `NOW()`**：时间列自阶段 3 起为裸 `DATETIME NOT NULL`
+（G2 决策：填充唯一来源是 `MetaObjectHandler`）。手写 XML 绕过了
+`MetaObjectHandler`，所以 `create_time` / `update_time` 必须由 SQL 显式填充；
+`deleted` 同理显式置 0（`@TableLogic` 的默认值只在 MP 自己拼 SQL 时才附加）。
+这是 design.md §3.5 那条约束的**唯一兑现点**，也是最容易漏的地方。
+
+**词书创建时机（阶段 6 实测修正）**：`importFromStream` **延迟到第一条合法行
+才创建词书**。早期实现在解析前就 `insert` 词书，结果是「整份文件全是坏行」
+抛 2004 之后库里仍留下一本 0 词的空壳（本方法的 `@Transactional` 只在
+调用方也是事务时才回滚）。现在把「是否存在合法行」与「创建词书」合并为一步，
+坏文件不产生任何副作用。已被 `BookControllerIntegrationTest#importAllBadLinesReturns2004` 锁定。
+
+**`word_count` 校正**：导入完成后 `COUNT(*)` 回写，而非自增累加
+（累加一旦中途失败就漂移）。`ImportResult.success` 也取同一 COUNT，
+保证「响应里的 success」与「library 里的 word_count」同源。
+
+### 7.4 错误码边界（查询参数 vs 文件内容）
+
+| 情形 | 响应 | 理由 |
+|---|---|---|
+| 单行格式错误 | `skipped++`，HTTP 200 `code=0` | 契约 §8.1「格式错误行跳过并计数」 |
+| 整个文件无一行合法 | `code=2004`，**不留空词书** | 契约 §8.1「整体格式非法时」 |
+| `category` 不在白名单 | `code=1005` | 参数错误，不是文件格式错误；两者用户动作不同 |
+| `file` 流不可读 | `code=2004` | 与整体非法同属「这份文件用不了」 |
+
+### 7.5 列表页的 N+1 规避
+
+`GET /api/client/books` 每个元素要带 `learnedCount`（该用户在此词书的已学词数）。
+若逐本调用 `countLearnedWordsInBook`，N 本词书就是 N 次 COUNT。
+故新增 `StatsMapper#selectLearnedCountByBook`——一次 `GROUP BY book_id`
+拿到全部，Service 侧转 `bookId → count` Map 后填充，SQL 次数恒为 1。
+
+`selected` 同理：一次 `selectList(user_word_book where user_id=?)` 转 `Set<Long>`，
+而不是每本书查一次关联表。
+
+> 别名注意：该查询的 `AS book_id` / `AS learned_count` 沿用下划线风格。
+> MyBatis 的列名自动映射对大小写不敏感，且 `map-underscore-to-camel-case`
+> 负责映射到实体的 `bookId`/`learnedCount`；用驼峰别名在 H2
+> （`DATABASE_TO_LOWER=TRUE`）下会被折成小写，反而映射不上。
 
 ---
 
@@ -447,6 +527,11 @@ example    = sentences[0].sentence（缺失则空）
 | AI 超时 | `RestTemplateBuilder` 每调用构造 | 全局单个超时 | 三接口超时不同（15/30/60），必须分别设置 |
 | 唯一索引加固 | `study_record` 加 `uk_user_word_date_type` | 仅应用层查重 | 并发安全 + 演示可重复性 |
 | 词库数据 | 本地落盘 + 双入口导入 | 运行时远程拉取 | jsdelivr 不可达；GitHub 大文件不稳 |
+| 词库去重 | **逐行导入、不去重** | 按 word 去重后入库 | 需求要求 `word_count` = 文件行数（7508/5651/9602）；源数据本身含重复词且释义各异，去重会破坏文档中的计数承诺 |
+| 批量插入 | **多行 VALUES 单语句**（自写 XML） | `saveBatch`/`Db.saveBatch` | 后者实为循环单条 insert；22761 行会变成 22761 次往返。见 §7.3 |
+| 词书创建时机 | 首个合法行处创建 | 解析前创建 | 避免「全坏行」输入留下 0 词空壳（阶段 6 实测缺陷） |
+| 种子导入开关 | `@ConditionalOnProperty(vocab.seed)` | `@Profile("seed")` | 一次性运维动作≠环境；避免 profile 组合限制 |
+| 列表 learnedCount | `GROUP BY book_id` 一次取全 | 逐本 COUNT | 规避 N+1。见 §7.5 |
 
 ---
 
