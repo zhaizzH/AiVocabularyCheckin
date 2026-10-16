@@ -405,3 +405,62 @@
 
 - 阶段 9 统计模块（补 StatsService/StatsController）
 - 阶段 11 待办：application.yml 生产默认 com.vocab.mapper 由 DEBUG 改 INFO
+
+
+## Session 7: backend 阶段 9：统计模块 + G6 契约回写
+<!-- trellis-session: v=2 fp=921e45fedd3ab5a1 -->
+
+**Date**: 2026-10-16
+**Task**: backend 阶段 9：统计模块 + G6 契约回写
+**Branch**: `main`
+
+### Summary
+
+实现契约 §7 热力图与掌握度两接口（SQL 聚合 + Java 补零/分档），并完成 G6 契约回写（接口详细设计 V1.1 + S3 V1.3）；277 测试全绿。
+
+### Main Changes
+
+- `common/MasteryRates`（**唯一真相源**）：`percent(mastered,total)`，`total<=0 → 100`；
+  统计曲线（§7.2）与 AI 报告（§9.3）共用，`AiServiceImpl#buildStudyStats` 一并改调它。
+- `StatsService`/`StatsServiceImpl` 只做「SQL 聚合 + Java 补零/分档」：
+  `heatmap` 按 `check_in_date` 聚合、恒定 `weeks×7` 点（缺省 12、上限 52）、
+  `level` 分档 `0 / 1–10 / 11–20 / 21+`；`mastery` 按 `study_date` 聚合、恒定 `days` 点
+  （缺省 30、上限 365）、`masteryRate` 为**当日快照**（整条曲线同值）。
+- `Constants` 增 `DEFAULT_HEATMAP_WEEKS=12` / `DEFAULT_MASTERY_DAYS=30` /
+  `MAX_HEATMAP_WEEKS=52` / `MAX_MASTERY_DAYS=365`。
+- **修 1 个真问题（规则一致性违反）**：`StatsMapper.xml#selectMasteryDaily` 原用
+  `DATE(create_time)`——**MySQL 专有函数**，违反「时间边界由 Java 传参」红线
+  （同文件头注释自己就声明了该规则；H2 `MODE=MySQL` 恰好支持 `DATE()`，故测试全绿而漏检）。
+  改为 SQL-92 `CAST(create_time AS DATE)`。
+- **G6 契约回写（先文档后代码，提交 `29e8e5f`）**：`docs/接口详细设计.md`
+  V1.0 → V1.1（20 处替换，390 → 498 行）+ `docs/S3-软件概要设计说明书-正文.md`
+  V1.3（5 处替换）。落盘脚本 `.tmp/g6_contract.py` / `.tmp/g6_s3.py` 对**每处替换
+  断言「恰好命中一次」**（文本漂移即 `FAIL ... 命中 N 次` 并 `exit(1)`），避免静默漏改；
+  首跑还捕获并修正了草稿里语义写反的一处（「不存在…记录」应为「存在…记录」）。
+  提交仅 2 文件，用 `git add --pathspec-from-file=.tmp/g6_paths.txt` 精确 add。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a8be043` | feat(stats): 阶段9 统计模块——打卡热力图与掌握度曲线（契约 §7） |
+| `29e8e5f` | docs(contract): 补齐管理端接口并记录 word_progress 偏离 |
+
+### Testing
+
+- [OK] mvn -o test → 277 tests, 0 failures, 0 errors（+27）
+- [OK] stage9-stats-smoke.py 29 PASS / 0 FAIL（真实 MySQL 8.4.9 + 真实 HTTP，独立前缀 stage9*）
+- [OK] 直连 pymysql 验证 CAST(create_time AS DATE) 在 MySQL 8.4.9 正确返回日期
+- [OK] 回归 g4-smoke.py 26 PASS / g4-crossday.py 18 PASS / g5-smoke.py 24 PASS，全 0 FAIL
+- [OK] G6 回写脚本每处替换断言恰好命中一次，20+5 处全部 OK
+- [OK] 红线 anime_tracker 仍 20 表
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 阶段 10 管理模块（契约 V1.1 §8 十个接口；前置已就位：JwtInterceptor 403+1007、WordBookService 三方法占位）
+- 阶段 11 收尾（README/smoke-test.sh/prd 逐条自查）
