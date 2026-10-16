@@ -4,15 +4,18 @@
 -- 依据：docs/S3-软件概要设计说明书-正文.md §7（表 7.1 ~ 7.6）
 --       .trellis/tasks/10-16-backend-api/design.md §3
 --
--- 约定（database-guidelines.md）：
+-- 约定（database-guidelines.md + S3 §7）：
 --   * InnoDB / utf8mb4，全库统一；表名、列名一律加反引号。
 --   * 公共列：id BIGINT 自增主键、create_time、update_time。
+--   * 时间列**不带数据库默认值**：create_time / update_time 一律由
+--     MyBatis-Plus MetaObjectHandler 自动填充（单套机制，避免 ORM 与
+--     数据库双写时间戳不一致）。因此实体字段必须标 @TableField(fill=...)。
 --   * 面向用户数据用逻辑删除（deleted + @TableLogic）；
 --     中间表 user_word_book 为物理删除，不加 deleted。
 --   * 不加数据库级外键约束，但所有关联列必须建索引。
---   * 索引命名 idx_<表名>_<列名> / uk_<表名>_<列名>
---     （S3 §7.1「关键索引」列的写法是简写，如 idx_category、
---       idx_user_date，此处按规范补全为带表名前缀的完整名）。
+--   * 索引命名严格照 S3 §7.1「关键索引」列原样（uk_username、idx_category、
+--     idx_book_id、idx_user_date、idx_user_book、idx_user_id……），
+--     不带表名前缀，以便与设计文档逐字对应。
 --
 -- 幂等：全部 CREATE TABLE IF NOT EXISTS，可重复执行（课设演示需要）。
 --
@@ -45,11 +48,11 @@ CREATE TABLE IF NOT EXISTS `user` (
   `role`          VARCHAR(20)  NOT NULL DEFAULT 'USER' COMMENT 'USER / ADMIN',
   `status`        TINYINT      NOT NULL DEFAULT 1 COMMENT '1 正常 / 0 禁用',
   `deleted`       TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除：0 未删除 / 1 已删除',
-  `create_time`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `update_time`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `create_time`   DATETIME     NOT NULL COMMENT '创建时间（由 MetaObjectHandler 填充）',
+  `update_time`   DATETIME     NOT NULL COMMENT '更新时间（由 MetaObjectHandler 填充）',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_user_username` (`username`),
-  UNIQUE KEY `uk_user_openid` (`openid`)
+  UNIQUE KEY `uk_username` (`username`),
+  UNIQUE KEY `uk_openid` (`openid`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户表';
@@ -64,10 +67,10 @@ CREATE TABLE IF NOT EXISTS `word_book` (
   `category`    VARCHAR(20)  NOT NULL COMMENT '分类：CET4 / CET6 / KAOYAN',
   `word_count`  INT          NOT NULL DEFAULT 0 COMMENT '单词数（导入/增删时维护）',
   `deleted`     TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除：0 未删除 / 1 已删除',
-  `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `update_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `create_time` DATETIME     NOT NULL COMMENT '创建时间（由 MetaObjectHandler 填充）',
+  `update_time` DATETIME     NOT NULL COMMENT '更新时间（由 MetaObjectHandler 填充）',
   PRIMARY KEY (`id`),
-  KEY `idx_word_book_category` (`category`)
+  KEY `idx_category` (`category`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci COMMENT = '词书表';
@@ -88,10 +91,10 @@ CREATE TABLE IF NOT EXISTS `word` (
   `example`     VARCHAR(500) NULL     DEFAULT NULL COMMENT '示例例句（内置降级例句来源）',
   `audio_url`   VARCHAR(255) NULL     DEFAULT NULL COMMENT '发音音频 URL（一期留空）',
   `deleted`     TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除：0 未删除 / 1 已删除',
-  `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `update_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `create_time` DATETIME     NOT NULL COMMENT '创建时间（由 MetaObjectHandler 填充）',
+  `update_time` DATETIME     NOT NULL COMMENT '更新时间（由 MetaObjectHandler 填充）',
   PRIMARY KEY (`id`),
-  KEY `idx_word_book_id` (`book_id`)
+  KEY `idx_book_id` (`book_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci COMMENT = '单词表';
@@ -99,27 +102,31 @@ CREATE TABLE IF NOT EXISTS `word` (
 -- ---------------------------------------------------------------------
 -- 表 7.4 user_word_book 用户已选词书中间表
 --   * 物理删除（移出词书即 DELETE 本行），故不加 deleted。
+--   * S3 §7.1 关键索引：idx_user_id、idx_book_id，均按原样建。
 --   * 加固：uk_user_word_book_user_book 唯一索引，从数据库层杜绝
 --     同一用户重复选同一词书（应用层另返回 2003）。
+--     —— 该唯一索引 S3 原文未定义，属刻意加固（design.md §4.2 相邻记录）。
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `user_word_book` (
   `id`          BIGINT   NOT NULL AUTO_INCREMENT COMMENT '主键',
   `user_id`     BIGINT   NOT NULL COMMENT '用户 id',
   `book_id`     BIGINT   NOT NULL COMMENT '词书 id',
-  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `create_time` DATETIME NOT NULL COMMENT '创建时间（由 MetaObjectHandler 填充）',
+  `update_time` DATETIME NOT NULL COMMENT '更新时间（由 MetaObjectHandler 填充）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_user_word_book_user_book` (`user_id`, `book_id`),
-  KEY `idx_user_word_book_book_id` (`book_id`)
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_book_id` (`book_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户已选词书中间表';
 
 -- ---------------------------------------------------------------------
 -- 表 7.5 study_record 学习记录表（含打卡）
+--   * S3 §7.1 关键索引：idx_user_date、idx_user_book，均按原样建。
 --   * 打卡热力图按 check_in_date 聚合；连续打卡天数由 StudyService 计算后写入快照。
 --   * 加固：uk_study_record_user_word_date_type 唯一索引，防并发重复打卡产生重复行
---     （S3 原文无此索引，属刻意加固，见 design.md §4.2 与 research 记录）。
+--     （S3 原文无此索引，属刻意加固，见 design.md §4.2）。
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `study_record` (
   `id`            BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键',
@@ -132,18 +139,19 @@ CREATE TABLE IF NOT EXISTS `study_record` (
   `streak_days`   INT         NOT NULL DEFAULT 0 COMMENT '当日连续打卡天数快照',
   `correct`       TINYINT     NULL DEFAULT NULL COMMENT '0 答错 / 1 答对（仅复习使用）',
   `deleted`       TINYINT     NOT NULL DEFAULT 0 COMMENT '逻辑删除：0 未删除 / 1 已删除',
-  `create_time`   DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `update_time`   DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `create_time`   DATETIME    NOT NULL COMMENT '创建时间（由 MetaObjectHandler 填充）',
+  `update_time`   DATETIME    NOT NULL COMMENT '更新时间（由 MetaObjectHandler 填充）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_study_record_user_word_date_type` (`user_id`, `word_id`, `study_date`, `study_type`),
-  KEY `idx_study_record_user_date` (`user_id`, `study_date`),
-  KEY `idx_study_record_user_book` (`user_id`, `book_id`)
+  KEY `idx_user_date` (`user_id`, `study_date`),
+  KEY `idx_user_book` (`user_id`, `book_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci COMMENT = '学习记录表（含打卡）';
 
 -- ---------------------------------------------------------------------
 -- 表 7.6 mistake_entry 错题表
+--   * S3 §7.1 关键索引：idx_user_id，按原样建。
 --   * 收录去重由应用层保证（同词重复错 → wrong_count+1，不重复建记录）。
 --     此处不加 (user_id, word_id) 唯一索引：逻辑删除的行仍留在表中，
 --     被移除后重新收录会与历史行冲突（见 design.md §4.4）。
@@ -156,10 +164,10 @@ CREATE TABLE IF NOT EXISTS `mistake_entry` (
   `wrong_count` INT         NOT NULL DEFAULT 0 COMMENT '累计错误次数（权威值，契约 §5.1 直接返回）',
   `mastered`    TINYINT     NOT NULL DEFAULT 0 COMMENT '0 未掌握 / 1 已掌握',
   `deleted`     TINYINT     NOT NULL DEFAULT 0 COMMENT '逻辑删除：0 未删除 / 1 已删除',
-  `create_time` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `update_time` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `create_time` DATETIME    NOT NULL COMMENT '创建时间（由 MetaObjectHandler 填充）',
+  `update_time` DATETIME    NOT NULL COMMENT '更新时间（由 MetaObjectHandler 填充）',
   PRIMARY KEY (`id`),
-  KEY `idx_mistake_entry_user_id` (`user_id`)
+  KEY `idx_user_id` (`user_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci COMMENT = '错题表';

@@ -56,18 +56,78 @@
 
 ## 3. 数据库迁移脚本（阶段闸口：脚本可重复执行、索引齐全）
 
-9. [ ] `db/V001__init.sql`：`user` / `word_book` / `word` / `user_word_book` / `study_record` / `mistake_entry`
-   - 每表 `CREATE TABLE IF NOT EXISTS`
-   - 公共列：`id` BIGINT AI PK、`create_time`/`update_time` DATETIME NOT NULL
+9. [x] `db/V001__init.sql`：`user` / `word_book` / `word` / `user_word_book` / `study_record` / `mistake_entry`
+   - 每表 `CREATE TABLE IF NOT EXISTS`；含 `CREATE DATABASE IF NOT EXISTS ai_vocab`（空库可自举）
+   - 公共列：`id` BIGINT AI PK、`create_time`/`update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP（+ON UPDATE）
    - 索引严格按 S3 §7.1 表清单 + design.md §4.2 的加固唯一索引
-   - 表名/列名加反引号
-10. [ ] `db/V002__word_progress.sql`：`word_progress` 表（DDL 见 design.md §3.2）
-11. [ ] 执行两个脚本；**再执行一次**验证幂等
+   - 表名/列名加反引号；显式 `ENGINE=InnoDB COLLATE=utf8mb4_0900_ai_ci`
+10. [x] `db/V002__word_progress.sql`：`word_progress` 表（DDL 见 design.md §3.2）
+11. [x] 执行两个脚本；**再执行一次**验证幂等；另做 **DROP DATABASE 后空库自举重建**
 
-**验证**（DBX MCP）：
-- `SHOW TABLES` 返回 7 张表
-- `SHOW INDEX FROM study_record` 含加固唯一索引
-- `SELECT COUNT(*) FROM (SELECT 1) x` 无异常；脚本二次执行无报错
+**验证结果（实测，pymysql 直连；未用 mysql CLI——本机未安装）**：
+- `SHOW TABLES` → **7 张表**，列名与顺序 100% 匹配 S3 表 7.1~7.6 + design §3.2（脚本化比对，7/7 通过）。
+- 索引实测（**G2 复核后为 S3 §7.1 原样命名**）：
+  `user`: `uk_username` / `uk_openid`；`word_book`: `idx_category`；`word`: `idx_book_id`；
+  `user_word_book`: `idx_user_id` / `idx_book_id` + 加固唯一 `uk_user_word_book_user_book(user_id,book_id)`；
+  `study_record`: `idx_user_date(user_id,study_date)` / `idx_user_book(user_id,book_id)`
+  + 加固唯一 `uk_study_record_user_word_date_type(user_id,word_id,study_date,study_type)`；
+  `mistake_entry`: `idx_user_id`；`word_progress`: 唯一 `uk_word_progress_user_word(user_id,word_id)`
+  / `idx_word_progress_user_review(user_id,next_review_date)` / `idx_word_progress_user_book_learned(user_id,book_id,learned)`。
+  共 14 个业务索引，全部 `NON_UNIQUE` 值与预期一致（唯一索引 `NON_UNIQUE=0`）。
+- 时间列：7 表 × 2 列均为裸 `DATETIME NOT NULL`，无 `DEFAULT` / `ON UPDATE`（设计决策见下第 2 条）。
+- 引擎/字符集：7 表均 InnoDB / utf8mb4_0900_ai_ci；**数据库级外键 0 个**（符合规范）。
+- **约束行为实测**（不只验 DDL 声明）：
+  - 重复 `username` → 报 `Duplicate entry 'dup' for key 'user.uk_username'` ✅
+  - 两个 `username=NULL` 行均可插入 ✅（微信用户场景，MySQL 唯一索引允许多 NULL）
+  - 同一用户重复选同一词书 → `Duplicate entry '5-1' for key 'user_word_book.uk_user_word_book_user_book'` ✅
+  - 同用户同词同日同类型 `study_record` 重复行 → 被拦截 ✅（并发重复打卡防线）
+  - `word_progress` `INSERT ... ON DUPLICATE KEY UPDATE` → 始终 1 行、`stage` 正确更新为 2 ✅（学习上报幂等）
+- **幂等**：两脚本连续执行两遍，退出码均为 0。
+- **空库自举**：`DROP DATABASE ai_vocab` 后仅执行 `V001`+`V002` 即重建出 7 张表（库字符集 utf8mb4 / utf8mb4_0900_ai_ci），证明 R4 回滚路径可用；`anime_tracker` 全程未触碰（每步验证其仍存在）。
+- 两个脚本已确认打入产物 jar 的 `BOOT-INF/classes/db/`。
+- 构建回归：`mvn -o clean package` ✅ **37 个测试全绿**。
+
+**阶段 3 实施记录（设计决策补充）**：
+- 列宽实测校准：导入源最大 `word=18` / `uk=58` / `translation=126` / `example=200`，
+  均落在 S3 定义宽度内（100/100/255/500），**无需调整**。
+  注：`sql_mode` 含 `STRICT_TRANS_TABLES`，若超宽会直接报错而非静默截断——故先实测再定宽。
+- `mistake_entry` **刻意不加** `(user_id, word_id)` 唯一索引：逻辑删除的历史行仍在表中，
+  「移除后重新收录」会与历史行冲突。去重由应用层保证（design.md §4.4）。此为有意偏离
+  「唯一索引防重」的直觉做法，理由已写入脚本注释。
+- S3 §5.4 原文「复习列表为计算生成，不设独立存储表」，而本设计 `word_progress` 存的是
+  **每词进度状态**（stage / next_review_date）而**非列表快照**；待复习列表仍是实时计算。
+
+**G2 复核调整（用户评审后执行，设计决策反转）**：
+
+1. **索引名回退为 S3 §7.1 原样**（此前曾按规范补表名前缀，现反转）：
+   `uk_username` / `uk_openid` / `idx_category` / `idx_book_id` / `idx_user_id` /
+   `idx_book_id` / `idx_user_date` / `idx_user_book` / `idx_user_id`。
+   理由：S3 是课设正式交付物，**逐字一致性优先于内部命名规范**（评审会对照文档核查脚本）。
+   加固新增的唯一索引仍带表名前缀（`uk_user_word_book_user_book` / `uk_study_record_user_word_date_type`），
+   因 S3 未定义、需避免歧义。详见 design.md §3.4。
+2. **移除 DB 层时间默认值**：`create_time` / `update_time` 改为裸 `DATETIME NOT NULL`，
+   不再有 `DEFAULT CURRENT_TIMESTAMP` / `ON UPDATE CURRENT_TIMESTAMP`，
+   时间戳全部由 MyBatis-Plus `MetaObjectHandler` 单套填充（避免 ORM 与 DB 双写分叉）。
+   传导约束：阶段 4 实体必须标 `@TableField(fill=INSERT / INSERT_UPDATE)`，否则插入报
+   `1364 Field 'create_time' doesn't have a default value`（已实测）。详见 design.md §3.5。
+3. **其余逐字对齐 docs/S3 §7**：已完成列级严格比对（见下）。
+4. `word_progress` 按用户决定**保持现状**（字段集与索引结构不变，仅同步去除时间默认值）。
+
+**G2 复核验证结果（实测，pymysql 直连）**：
+- 空库自举：`DROP DATABASE ai_vocab` 后仅执行 V001+V002 → **7 张表**（全部 InnoDB / utf8mb4_0900_ai_ci）。
+- **列定义严格比对 S3**：6 张表逐字段（列名 + 类型 + 长度 + 可空性 + 顺序）
+  **全部 100% 匹配**（55 列：user 11 / word_book 8 / word 11 / user_word_book 5 /
+  study_record 12 / mistake_entry 9）；`word_progress` 11 列与 design.md §3.2 一致。
+- **索引逐字核对**：14/14 通过（名称 + 列组合 + 唯一性，脚本断言 ALL PASS，无多余索引）。
+- **时间列**：14 个时间列（7 表 × 2）`COLUMN_DEFAULT` 全为 NULL、`EXTRA` 无 `DEFAULT`/`ON UPDATE`；
+  反证：不带 `create_time` 的裸 INSERT 被拒（`1364`），带值则成功。
+- **约束行为实测**：重复 `username` → `Duplicate entry 'dup' for key 'user.uk_username'` ✅；
+  多个 NULL `openid` 均可插入 ✅；重复选书 → `uk_user_word_book_user_book` 拦截 ✅；
+  同日同词同类型 `study_record` → `uk_study_record_user_word_date_type` 拦截 ✅；
+  `word_progress` upsert 始终 1 行、stage 更新为 2 ✅。
+- **幂等**：V001+V002 连跑两遍均 exit 0，仍为 7 表。
+- **红线**：`anime_tracker` 全程 20 表、最后建表时间未变（`UNCHANGED: True`）。
+- 构建回归：`mvn -o clean package` ✅ 37 测试全绿；两脚本已确认打入 jar 且与磁盘 md5 一致。
 
 ## 4. 实体与 Mapper（阶段闸口：MyBatis-Plus 能读写 7 张表）
 
@@ -236,8 +296,15 @@ python .tmp/dbx.py dbx_execute_query '{"connection_name":"aivocab-root","databas
 
 - [ ] S3 §7 表数 6 → 7（`word_progress`）
 - [ ] S3 §7.5 `study_record` 补加固唯一索引说明
+- [ ] S3 §7.1「关键索引」列补注：`user_word_book` 实际还有加固唯一索引
+      `uk_user_word_book_user_book`（S3 只列 `idx_user_id`、`idx_book_id`）
+- [ ] S3 §7.2 补注：`create_time` / `update_time` 不带数据库默认值，
+      由 MyBatis-Plus `MetaObjectHandler` 填充（S3 只写了字段，未规定默认值语义）
 - [ ] S3 §8.2 待确定问题登记 AI 供应商为 DeepSeek
 - [ ] `docs/接口详细设计.md` §8/§10（阶段 40 已完成）
 - [ ] **`docs/接口详细设计.md` §0 错误码表**：补 `1006/1007/9002/9003/9004`
       及「HTTP 4xx 保留给路由层错误」的边界说明
       → 详见 `research/01-contract-gaps-stage2.md`
+
+> 说明：索引名**已回退为 S3 §7.1 原样**（G2 复核决策），故**不再属于**待同步项——
+> 脚本与 S3 已逐字一致（14/14 实测）。

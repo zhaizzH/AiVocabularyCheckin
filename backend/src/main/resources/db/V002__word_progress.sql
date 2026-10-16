@@ -14,6 +14,9 @@
 --
 -- 依据：.trellis/tasks/10-16-backend-api/design.md §3.2
 -- 幂等：CREATE TABLE IF NOT EXISTS，可重复执行。
+--
+-- 时间列不带数据库默认值（与 V001 一致）：create_time / update_time 由
+-- MyBatis-Plus MetaObjectHandler 自动填充；实体须标 @TableField(fill=...)。
 -- =====================================================================
 
 SET NAMES utf8mb4;
@@ -30,8 +33,8 @@ CREATE TABLE IF NOT EXISTS `word_progress` (
   `learned`          TINYINT  NOT NULL DEFAULT 0 COMMENT '1=已学过（进入过学习计划并上报）',
   `wrong_count`      INT      NOT NULL DEFAULT 0 COMMENT '累计错误次数（复习调度参考；权威值在 mistake_entry.wrong_count）',
   `deleted`          TINYINT  NOT NULL DEFAULT 0 COMMENT '逻辑删除：0 未删除 / 1 已删除',
-  `create_time`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `update_time`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `create_time`      DATETIME NOT NULL COMMENT '创建时间（由 MetaObjectHandler 填充）',
+  `update_time`      DATETIME NOT NULL COMMENT '更新时间（由 MetaObjectHandler 填充）',
   PRIMARY KEY (`id`),
   -- 唯一键 (user_id, word_id)：学习上报天然幂等（INSERT ... ON DUPLICATE KEY UPDATE）
   UNIQUE KEY `uk_word_progress_user_word` (`user_id`, `word_id`),

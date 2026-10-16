@@ -132,6 +132,55 @@ CREATE TABLE IF NOT EXISTS word_progress (
 
 MySQL 8 中 `USER` / `STATUS` / `ROLE` / `SOURCE` / `LEVEL` / `CORRECT` 经实测**均非保留字**（`INFORMATION_SCHEMA.KEYWORDS.RESERVED = 0`）。但为稳妥，DDL 与 XML 中表名/列名统一加反引号。
 
+### 3.4 索引命名：严格照 S3 §7.1 原样（G2 复核后决策）
+
+**最终决策**：索引名**逐字照 S3 §7.1「关键索引」列**，**不加表名前缀**。
+
+| 表 | 索引名 | 类型 |
+|---|---|---|
+| user | `uk_username` / `uk_openid` | 唯一 |
+| word_book | `idx_category` | 普通 |
+| word | `idx_book_id` | 普通 |
+| user_word_book | `idx_user_id` / `idx_book_id` / `uk_user_word_book_user_book` | 普通 ×2 + 唯一 |
+| study_record | `idx_user_date` / `idx_user_book` / `uk_study_record_user_word_date_type` | 普通 ×2 + 唯一 |
+| mistake_entry | `idx_user_id` | 普通 |
+| word_progress | `uk_word_progress_user_word` / `idx_word_progress_user_review` / `idx_word_progress_user_book_learned` | 唯一 + 普通 ×2 |
+
+**与 `database-guidelines.md` 的偏差说明**：规范建议 `idx_<表名>_<列名>` 带表名前缀，
+但**交付文档的逐字一致性优先**（S3 是课设正式交付物，评审会对照文档核查脚本）。
+S3 §7.1 的 `uk_username` / `idx_category` / `idx_book_id` / `idx_user_date` / `idx_user_book` /
+`idx_user_id` 共 8 个索引名按原样采用；`user_word_book` 的两个原样索引名恰好
+不带表名前缀（`idx_user_id` / `idx_book_id`），与 S3 一致。
+
+**注意**：加固新增的唯一索引（S3 未定义）仍带表名前缀以避免歧义，
+即 `uk_user_word_book_user_book` / `uk_study_record_user_word_date_type`；
+`word_progress` 为新增表，索引名自然带表名前缀。
+
+> 索引名影响应用层零处（MyBatis-Plus 不引用索引名），因此改名零风险。
+> 已实测 14/14 索引（名称 + 列组合 + 唯一性）与预期完全一致。
+
+### 3.5 时间戳填充：ORM 单套机制（G2 复核后决策）
+
+**最终决策**：`create_time` / `update_time` **不带任何数据库默认值**
+（既无 `DEFAULT CURRENT_TIMESTAMP`，也无 `ON UPDATE CURRENT_TIMESTAMP`），
+两列均为 `DATETIME NOT NULL`，值**全部由 MyBatis-Plus `MetaObjectHandler` 填充**
+（阶段 2 已在 `MybatisPlusConfig#metaObjectHandler` 实现 `insertFill`/`updateFill`）。
+
+**理由**：避免 ORM 与数据库两套机制各写一次时间戳导致不一致
+（典型症状：`UPDATE` 走 XML 或裸 SQL 时 `update_time` 由 DB 改、`create_time` 由 ORM 改，语义分叉）。
+单一来源更易推理，也与「实体 `@TableField(fill=...)`」的声明式配置对齐。
+
+**约束传导（阶段 4 必须遵守）**：
+- 7 个实体的 `createTime` / `updateTime` 字段**必须**标注
+  `@TableField(value = "create_time", fill = FieldFill.INSERT)` 与
+  `@TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)`，
+  否则插入时该列无值 → `Field 'create_time' doesn't have a default value`（已实测该报错）。
+- 任何**绕过 MyBatis-Plus** 的写库（`StatsMapper.xml` 只读，无此问题；
+  但若未来出现 XML 写操作）必须手工赋值时间列。
+
+> 实测反证：不带 `create_time` 的裸 `INSERT` 被拒（`1364 Field 'create_time' doesn't have a default value`），
+> 证明 DB 层确实不再兜底；`user_word_book` 中间表（物理删除、无 `deleted`）同样适用。
+
 ---
 
 ## 4. 关键算法
