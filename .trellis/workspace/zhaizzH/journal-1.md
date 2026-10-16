@@ -290,3 +290,59 @@
 ### Next Steps
 
 - 阶段 7 学习/复习/错题核心闭环 → G4
+
+
+## Session 5: backend 阶段 7：学习/复习/错题核心闭环（G4 通过）
+<!-- trellis-session: v=2 fp=f40a5d7e821496c7 -->
+
+**Date**: 2026-10-16
+**Task**: backend 阶段 7：学习/复习/错题核心闭环（G4 通过）
+**Branch**: `main`
+
+### Summary
+
+实现契约 §3/§4/§5 共 11 个客户端接口，落地间隔复习算法与打卡闭环；G4 闸口以真实 MySQL + 真实 HTTP 端到端验证，231 测试全绿。
+
+### Main Changes
+
+- **DTO**：`dto/response/` 11 个 + `dto/request/{StudyRecordRequest,ReviewRecordRequest}`。
+- **算法纯函数**：`service/ReviewSchedule`（`nextStage`/`intervalDays`/`nextReviewDate`，
+  `REVIEW_INTERVALS=[1,3,7,15]`）；`common/Pages` 分页归一化（`WordBookServiceImpl` 一并重构复用）。
+- **可注入「今天」**：`config/ClockConfig`（`Clock.systemDefaultZone()` Bean）+
+  `MybatisPlusConfig` 构造注入 `Clock` 供 `MetaObjectHandler` 使用；
+  测试侧 `testsupport/FixedClock` + `TestClockConfig`（`@Primary` 覆盖生产 Bean）。
+- **Service/Mapper**：`StudyService` / `ReviewService` / `MistakeService` +
+  `WordProgressMapper.xml`（NEW，4 表 JOIN，手工 `deleted=0`）；列表两段式避开 N+1。
+- **修 2 个真缺陷（均由测试先失败暴露）**：
+  1. **「做完反而不能打卡」**：计划原按实时推导生成，词上报后逐词从计划消失，
+     全部做完 `total=0` → `checkIn` 抛 3002。改为「今日任务集合」语义并追加第三段
+     「今天已上报过的词」（`todayReportedWordTypes`），使 `total` 恒定、
+     `finished` 单调递增。**已回写契约 §3.1（V1.1）**。
+  2. **计划候选集后滑**：`selectUnlearnedNewWordIds` 判据 `update_time < dayStart`
+     被复习刷新误伤 → 改为 `create_time < dayStart` 且 `learned=1`。
+- ⚠ **夹具教训（非产品缺陷）**：`study_record.study_date` 与 `check_in_date` 在真实数据里
+  **恒等**（打卡时同时写入），跨天夹具回拨日期必须**成对回拨**；只改其一会使
+  `lastCheckInDate` 假失败（第一版 `g4-crossday.py` 即踩此坑）。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `748062d` | feat(backend): 阶段7 学习/复习/错题核心闭环（§3/§4/§5） |
+| `76cf216` | test(backend): G4 闸口通过——真实 MySQL + 真实 HTTP 端到端验证 |
+
+### Testing
+
+- [OK] mvn -o test → 231 tests, 0 failures, 0 errors（+88）
+- [OK] g4-smoke.py 26 PASS / 0 FAIL（真实 MySQL + 真实 HTTP）
+- [OK] g4-crossday.py 18 PASS / 0 FAIL（自包含跨天：streak=2、复习词 overlap=20、stage 1→2 隔 3 天、3→4 隔 15 天）
+- [OK] 数据完整性：learned=1 且 next_review_date IS NULL=0、stage 越界=0、三类唯一约束重复组=0
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 阶段 8 AI 中转与降级（契约 §6）→ G5
