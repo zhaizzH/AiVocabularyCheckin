@@ -1,8 +1,12 @@
 package com.vocab.common;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vocab.common.Constants;
 import com.vocab.config.JwtUtil;
+import com.vocab.entity.User;
+import com.vocab.mapper.UserMapper;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +16,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -27,6 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Transactional
 class GlobalExceptionHandlerIntegrationTest {
 
     private static final String PROBE = "/api/client/__test";
@@ -37,9 +43,32 @@ class GlobalExceptionHandlerIntegrationTest {
     @Autowired
     private JwtUtil jwtUtil;
 
+    @Autowired
+    private UserMapper userMapper;
+
+    /**
+     * 阶段 5 起 {@code UserStatusValidator} 由真实查库实现，
+     * 因此「不存在于库中的 userId」会被拦截为 401，而不是走到控制器。
+     * 本类专注验证异常处理，必须先建一个真实用户再签发 token。
+     */
+    private Long activeUserId;
+
+    @BeforeEach
+    void createActiveUser() {
+        User user = new User();
+        user.setUsername("probe_user_" + System.nanoTime());
+        user.setPasswordHash("$2a$10$fakeHashForExceptionHandlerTest");
+        user.setNickname("探针用户");
+        user.setAvatar(Constants.DEFAULT_AVATAR);
+        user.setRole(Constants.ROLE_USER);
+        user.setStatus(Constants.STATUS_ENABLED);
+        userMapper.insert(user);
+        activeUserId = user.getId();
+    }
+
     /** 携带合法 token 以通过拦截器，专注验证异常处理本身。 */
     private String token() {
-        return jwtUtil.generateToken(999L, "USER");
+        return jwtUtil.generateToken(activeUserId, Constants.ROLE_USER);
     }
 
     @Test

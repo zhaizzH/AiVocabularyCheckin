@@ -52,6 +52,12 @@ public final class Constants {
     /** 默认头像。 */
     public static final String DEFAULT_AVATAR = "avatar_1";
 
+    /** 微信自动建号时的昵称前缀（契约 §1.3「微信用户+随机后缀」）。 */
+    public static final String WX_NICKNAME_PREFIX = "微信用户";
+
+    /** 微信自动建号昵称的随机后缀长度。 */
+    public static final int WX_NICKNAME_SUFFIX_LENGTH = 4;
+
     /** 用户角色。 */
     public static final String ROLE_USER = "USER";
     public static final String ROLE_ADMIN = "ADMIN";

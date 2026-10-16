@@ -95,12 +95,22 @@ public class JwtInterceptor implements HandlerInterceptor {
         }
 
         // 禁用即时生效：每次请求查库校验 status（一期 QPS 低，正确性优先）。
-        // 真实实现在阶段 5 接入；未接入时 provider 为空，跳过校验。
+        // 真实实现在阶段 5 接入（UserStatusValidatorImpl）；未接入时 provider 为空，跳过校验。
         UserStatusValidator validator = statusValidatorProvider.getIfAvailable();
-        if (validator != null && !validator.isActive(userId)) {
-            log.info("账号已禁用，拒绝访问 userId={} path={}", userId, path);
-            writeUnauthorized(response, ErrorCode.USER_DISABLED);
-            return false;
+        if (validator != null) {
+            UserStatusValidator.AccountState state = validator.check(userId);
+            if (state == UserStatusValidator.AccountState.DISABLED) {
+                log.info("账号已禁用，拒绝访问 userId={} path={}", userId, path);
+                writeUnauthorized(response, ErrorCode.USER_DISABLED);
+                return false;
+            }
+            if (state == UserStatusValidator.AccountState.UNKNOWN) {
+                // 账号已被删除，但 token 仍在有效期内——按「登录态失效」处理，
+                // 引导前端清 token 重新登录。
+                log.debug("token 对应的账号不存在 userId={} path={}", userId, path);
+                writeUnauthorized(response, ErrorCode.TOKEN_INVALID);
+                return false;
+            }
         }
 
         // 管理端必须 ADMIN（契约 §0：403 = 非管理员访问 /api/admin/**）

@@ -29,11 +29,30 @@ public class RestTemplateConfig {
     /** 默认读超时：取三接口中最小值，避免误用为长耗时调用。 */
     private static final Duration DEFAULT_READ_TIMEOUT = Duration.ofSeconds(15);
 
+    /** 微信 code2Session 专用读超时。 */
+    private static final Duration WX_READ_TIMEOUT = Duration.ofSeconds(5);
+
     @Bean
     public RestTemplate restTemplate() {
+        return build(DEFAULT_CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT);
+    }
+
+    /**
+     * 微信 {@code code2Session} 专用客户端。
+     *
+     * <p>为什么不复用上面的默认实例：该调用位于<b>登录主链路</b>上，
+     * 用户在前端等待结果。默认 15s 读超时太长——微信侧异常时用户会干等 15 秒。
+     * 这里收紧到 5s，快速失败并由前端提示重试。
+     */
+    @Bean("wxRestTemplate")
+    public RestTemplate wxRestTemplate() {
+        return build(DEFAULT_CONNECT_TIMEOUT, WX_READ_TIMEOUT);
+    }
+
+    private RestTemplate build(Duration connectTimeout, Duration readTimeout) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(DEFAULT_CONNECT_TIMEOUT);
-        factory.setReadTimeout(DEFAULT_READ_TIMEOUT);
+        factory.setConnectTimeout(connectTimeout);
+        factory.setReadTimeout(readTimeout);
         return new RestTemplate(factory);
     }
 }

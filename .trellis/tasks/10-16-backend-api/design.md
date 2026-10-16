@@ -313,31 +313,59 @@ GROUP BY study_date
 
 ### 5.1 JWT
 
-- 载荷：`userId`(Long)、`role`(String)，`exp` = 签发 + 7 天。
-- 算法 HS256，密钥从环境变量 `JWT_SECRET` 读取（**必须有默认值兜底以免本地启动失败，但默认值仅用于本地开发且需注释警告**）。
+- 载荷：`userId`(Long)、`role`(String)，`exp` = 签发 + 7 天（604800000ms）。
+- 算法 HS256，密钥从环境变量 `JWT_SECRET` 读取。
+- **`JWT_SECRET` 无默认值（fail-fast）**：`application.yml` 写作 `secret: ${JWT_SECRET}`，缺失即启动失败（`Could not resolve placeholder 'JWT_SECRET'`）。
+  - 为什么反转「给个默认值兜底」的常见做法：红线要求「无明文密钥入库」。若给默认值，一个忘了配环境变量的生产部署会**静默**地用公开在仓库里的密钥签发 token——任何人都能伪造 JWT。启动失败是这里唯一安全的行为。
+  - 本地开发由 gitignore 的 `application-local.yml` 提供（profile=local），仓库内只留 `application-local.yml.example` 模板。
 - 库选型：`jjwt 0.12.x`（`jjwt-api` / `jjwt-impl` / `jjwt-jackson`）。
 
 ### 5.2 拦截器
 
 ```java
 JwtInterceptor:
-  放行：/api/client/auth/register, /api/client/auth/login, /api/client/auth/wx-login
+  放行：OPTIONS 预检；/api/client/auth/register, /api/client/auth/login, /api/client/auth/wx-login
   其余：解析 Authorization: Bearer <token>
-        - 缺失/格式错/过期/签名错 → 401
-        - 查库校验 user.status == 1，若为 0 → 401 + 1003 文案（禁用即时生效）
-        - 路径以 /api/admin/ 开头且 role != ADMIN → 403
+        - 头缺失/格式错/过期/签名错 → 401 + 1006
+        - 查库校验 user.status 三态：
+            DISABLED(0)  → 401 + 1003（禁用即时生效）
+            UNKNOWN(无)  → 401 + 1006（账号已删/注销，引导重登）
+            ACTIVE(1)    → 继续
+        - 路径以 /api/admin/ 开头且 role != ADMIN → 403 + 1007
         - 通过 → 写入 ThreadLocal 的 UserContext
+  afterCompletion：**必须** UserContext.clear()（Tomcat 复用工作线程，不清理会串号）
 ```
 
-**禁用即时生效**的实现关键是**每次请求都查库**校验 status（而非信任 token 内容）。这是契约的显式要求（§8.7「禁用后该用户 JWT 下次校验返回 401」）。为避免每请求一次查询的开销，可加**短 TTL 本地缓存（如 10s）**；但为演示确定性，**一期直接查库**（词表小、QPS 低），在代码中注释说明取舍。
+**禁用即时生效**的实现关键是**每次请求都查库**校验 status（而非信任 token 内容）。这是契约的显式要求（§8.7「禁用后该用户 JWT 下次校验返回 401」）。为避免每请求一次查询的开销，可加**短 TTL 本地缓存（如 10s）**；但为演示确定性，**一期直接查库**（用户表小、QPS 低），在代码中注释说明取舍。
+
+**为何是「三态」而非「布尔」**（阶段 5 决策）：原设计只有 `isActive(Long) → boolean`，`false` 一个值要同时承载两种语义，但二者用户可见行为不同——被禁用的用户应「联系管理员」（1003），已被删除/注销账号的持有者应「重新登录」（1006）。混用会让后者去找到一个根本不存在的账号。
 
 ### 5.3 BCrypt
 
-`spring-security-crypto` 的 `BCryptPasswordEncoder`（**只引 crypto 模块，不引整个 spring-security**，避免默认安全链干扰自定义拦截器）。
+`spring-security-crypto` 的 `BCryptPasswordEncoder`（**只引 crypto 模块，不引整个 spring-security**，避免默认安全链干扰自定义拦截器）。强度 10（Spring Security 默认，约 50–100ms/次）。
 
 ### 5.4 CORS
 
-管理端 Vite dev server（默认 5173）需跨域。`WebMvcConfig#addCorsMappings` 允许 `http://localhost:5173` / `127.0.0.1:5173`，允许 `Authorization` 头。小程序端无 CORS 限制（走微信请求）。
+管理端 Vite dev server（默认 5173）需跨域。`WebMvcConfig#addCorsMappings` 允许 `http://localhost:5173` / `127.0.0.1:5173`（**参数化为 `cors.allowed-origins` / 环境变量 `CORS_ALLOWED_ORIGINS`**，不硬编码），允许 `Authorization` 头。小程序端无 CORS 限制（走微信请求）。
+
+### 5.5 第三方调用：微信 code2Session（阶段 5）
+
+- 专用 `wxRestTemplate`（连接 5s / 读 5s）：该调用位于**登录主链路上**，用户在前端等待，不能用默认的 15s 读超时。
+- 凭据 `wx.appid` / `wx.secret` 从 `WX_APPID` / `WX_SECRET` 读取；未配置时不发 HTTP，直接 1004（保证无 AppID 时服务仍可启动、账号密码登录不受影响）。
+- URL 参数化为 `wx.code2session-url`（`WX_CODE2SESSION_URL`）。
+- 所有失败路径（未配置 / 网络异常 / `errcode != 0` / 响应缺 openid / 非 JSON）统一映射为 **1004**，**绝不**冒泡成 9001 系统错误。
+- **日志红线**：绝不打印请求 URI（query 里拼了 secret），只记异常类名与微信返回的 `errcode`/`errmsg`。
+
+### 5.6 账号唯一性与并发（阶段 5）
+
+「先查后插」有竞态窗口，**正确性由数据库唯一索引保证**，应用层检查只为友好提示：
+
+| 场景 | 索引 | 冲突后处理 |
+|---|---|---|
+| 注册重名 | `uk_username` | → 1001（与预检查同一语义） |
+| 微信并发建号 | `uk_openid` | 重查复用已建账号；重查仍无则**原样抛出**交全局处理器 |
+
+微信账号的 `username` 与 `password_hash` 均置 NULL：MySQL 唯一索引允许多个 NULL，既不影响 `uk_username`，也从数据层保证其无法走密码登录。
 
 ---
 

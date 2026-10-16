@@ -209,11 +209,11 @@
 - 事务回滚核实：7 表精确 `COUNT(*)` 全为 0（无数据残留）。
 - 红线：`anime_tracker` 仍 20 表，未被触碰。
 
-## 5. 认证模块（阶段闸口：5 个 auth 接口自测通过）
+## 5. 认证模块（阶段闸口：5 个 auth 接口自测通过）—— **已完成（118 测试全绿）**
 
-15. [ ] `AuthService`：注册（格式校验 + 唯一性 + BCrypt）、登录（失败 1002 → WARN 日志不含密码；禁用 1003）、微信登录（`code2Session`，真实 HTTP 调用微信 API；openid 不存在则建用户返回 `isNewUser:true`）、`profile` 查询（含 `totalCheckInDays`）、`profile` 更新（nickname ≤20、avatar 白名单 `avatar_1..6`）
-16. [ ] `AuthController` + 4 个 request DTO + 3 个 response DTO
-17. [ ] JWT 签发（userId/role/7 天）与 `JwtInterceptor` 全链路生效
+15. [x] `AuthService`：注册（格式校验 + 唯一性 + BCrypt）、登录（失败 1002 → WARN 日志不含密码；禁用 1003）、微信登录（`code2Session`，真实 HTTP 调用微信 API；openid 不存在则建用户返回 `isNewUser:true`）、`profile` 查询（含 `totalCheckInDays`）、`profile` 更新（nickname ≤20、avatar 白名单 `avatar_1..6`）
+16. [x] `AuthController` + 4 个 request DTO + 3 个 response DTO
+17. [x] JWT 签发（userId/role/7 天）与 `JwtInterceptor` 全链路生效
 
 **验证**：
 ```bash
@@ -228,7 +228,39 @@ curl -s -X POST localhost:8080/api/client/auth/register -H 'Content-Type: applic
 # avatar 传 "avatar_9" → 1005
 ```
 - 微信登录 **无 AppID 时**：用单测 mock 掉微信 HTTP 调用，验证 openid 新建/复用两条分支。
-- [ ] `AuthServiceTest`：注册重复用户名、密码强度、nickname 长度、avatar 白名单
+- [x] `AuthServiceTest`：注册重复用户名、密码强度、nickname 长度、avatar 白名单
+
+**阶段 5 实施记录（已完成，118 测试全绿）**：
+
+- **产出文件**：
+  - `dto/request/`：`RegisterRequest` / `LoginRequest` / `WxLoginRequest` / `UpdateProfileRequest`
+  - `dto/response/`：`RegisterResponse` / `UserInfoResponse` / `LoginResponse` / `ProfileResponse`
+  - `client/WxApiClient`：`code2Session` 真实调用（专用 `wxRestTemplate`，5s 超时）
+  - `config/UserStatusValidator`：三态枚举（`ACTIVE` / `DISABLED` / `UNKNOWN`）
+  - `config/UserStatusValidatorImpl`：每请求主键查库（`selectById`，`@TableLogic` 自动附 `deleted=0`）
+  - `config/JwtInterceptor`：从原单方法 `isActive(Long)` 改为三态 `check(Long)`，区分 1003 与 1006
+  - `service/AuthService` + `service/impl/AuthServiceImpl`
+  - `controller/AuthController`（5 个接口，均只调一个 Service 方法 + 包 `Result`）
+
+- **关键设计取舍**：
+  1. **`UserStatusValidator` 从单方法升为三态枚举**：原 `isActive(Long)` 无法区分「账号被禁用（用户应找管理员）」与「账号不存在/已注销（应引导重新登录）」。两者都是 401，但 1003 与 1006 文案不同，混用会误导已注销账号的持有者去找管理员。
+  2. **每请求查库校验 `status`**（而非信任 token）：这是 §8.7「禁用后下次请求立即失败」的唯一实现方式。一期 QPS 低，一次主键查询毫秒级；代价是每个受保护请求多一次 DB 查询，换来演示关键路径的确定性。
+  3. **登录失败不区分「用户不存在」与「密码错误」**（均 1002）：避免用户枚举。微信用户（`password_hash` 为 NULL）走密码登录也归入 1002，且不得 NPE。
+  4. **唯一性靠数据库唯一索引兜底**，而非仅靠「先查后插」：并发注册/并发微信建号都会撞唯一索引，捕获 `DuplicateKeyException` 后转为同一语义（登录重查复用；注册报 1001）。检查只是友好提示，索引才是正确性保证。
+  5. **微信账号 `username` / `password_hash` 均为 NULL**：MySQL 唯一索引允许多个 NULL，不影响 `uk_username`；也从数据层保证微信账号无法走密码登录。
+  6. **写入的 userId 一律取自 `UserContext`（token）**：`profile` / `updateProfile` 绝不接受请求参数传入 userId，无越权写入风险。
+
+- **实测验证（可重复）**：
+  - `mvn -o clean test`：**118 测试全绿**（阶段 2 的 37 + 阶段 4 的 19 + 本阶段新增 62），连跑 3 次稳定；
+  - 新增测试：`client/WxApiClientTest`（8，起真实本地 HTTP 桩服务）、`service/AuthServiceImplTest`（21，真实库 + 并发分支桩注入）、`controller/AuthControllerIntegrationTest`（25，走 MockMvc 真实 HTTP）；
+  - 改造两个阶段 2 遗留测试类（`GlobalExceptionHandlerIntegrationTest` / `JwtInterceptorIntegrationTest`，原先伪造 userId=999 签 token，如今会被真实查库判为 `UNKNOWN` → 401，故改为先建真实用户），并顺势锁定「禁用立即生效」与 `UserContext` 不串号；
+  - **真实 MySQL + 真实微信 API 闸口冒烟**：`java -jar` 起真实服务，`/c/tmp/stage5-smoke.sh` **38/38 全过**；
+    - 微信 `code2Session` 走真实网络：无效 code 返回 `errcode=40029` → 应用转为 1004（证明 appid/secret 已被微信接受）；
+    - `§8.7` 禁用即时生效：直接 `UPDATE user SET status=0` 后，**同一 token 立即** → HTTP 401 + 1003；同一账号重新登录也 → 1003；
+    - 响应体 UTF-8 逐字节校验：1002 文案字节 `e794a8...e8afaf` 与期望完全一致（中文不乱码）；
+    - `createTime` 输出 `2026-10-16 18:11:07`（空格分隔，非 ISO 的 `T`）；
+  - 红线自查：`main` 下无 `System.out` / `printStackTrace` / 硬编码凭证；`application.yml` 中 appid/secret 均为 `${WX_APPID:}` / `${WX_SECRET:}` 占位符；真实凭证仅在 `application-local.yml`（`.gitignore` 已验证排除）；
+  - 红线比对：`anime_tracker` 仍 20 表，`ai_vocab` 7 表，冒烟数据已清理（`user` 表回到 0 行），**无非 BCrypt 密码哈希**。
 
 ## 6. 词库模块 + 种子导入（阶段闸口：三本词书入库且计数正确）
 
@@ -327,8 +359,8 @@ FROM word_book b;
 
 | # | 位置 | 闸口内容 |
 |---|---|---|
-| G1 | 阶段 1 后 | 建库与词库落盘完成，行数正确 |
-| G2 | 阶段 3 后 | 7 张表结构与 S3 §7 + design.md 一致 |
+| G1 ✅ | 阶段 1 后 | 建库与词库落盘完成，行数正确 |
+| G2 ✅ | 阶段 3 后 | 7 张表结构与 S3 §7 + design.md 一致 |
 | G3 | 阶段 6 后 | 三本词书计数 7508/5651/9602 严格一致 |
 | G4 | 阶段 7 后 | 核心闭环端到端跑通 + 算法单测通过 |
 | G5 | 阶段 8 后 | **降级路径在 ai-service 未启动时全绿**（一等约束） |
