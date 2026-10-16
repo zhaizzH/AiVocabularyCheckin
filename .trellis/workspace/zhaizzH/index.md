@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 8
+- **Total Sessions**: 9
 - **Last Active**: 2026-10-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~504 | Active |
+| `journal-1.md` | ~543 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 9 | 2026-10-16 | backend 任务归档与收尾（/trellis-finish-work） | `c376ce2`, `624b978` | `main` |
 | 8 | 2026-10-16 | backend 阶段 10-11：管理模块（G6）+ 收尾交付（G7） | `c376ce2`, `624b978` | `main` |
 | 7 | 2026-10-16 | backend 阶段 9：统计模块 + G6 契约回写 | `a8be043`, `29e8e5f` | `main` |
 | 6 | 2026-10-16 | backend 阶段 8：AI 中转与降级（G5 通过） | `a097e6e`, `45eb7d8` | `main` |

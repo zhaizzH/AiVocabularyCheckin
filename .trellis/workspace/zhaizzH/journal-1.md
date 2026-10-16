@@ -502,3 +502,42 @@ Session summary was not supplied.
 ### Next Steps
 
 - ai-service 子任务：key 到位后补 AI 成功路径验证
+
+
+## Session 9: backend 任务归档与收尾（/trellis-finish-work）
+<!-- trellis-session: v=2 fp=28f4a65375982739 -->
+
+**Date**: 2026-10-16
+**Task**: backend 任务归档与收尾（/trellis-finish-work）
+**Branch**: `main`
+
+### Summary
+
+归档 10-16-backend-api（--skip-branch-validation，任务从未 PR-backed）并记录收尾会话；未改代码。
+
+### Main Changes
+
+- 归档任务 10-16-backend-api → .trellis/tasks/archive/2026-10/（c1c9d65，仅任务目录）
+- 归档用 --skip-branch-validation：单 trunk 本地仓库、无远端/PR/worktree，branch 与 base_branch 同为 main
+- 工作区 24 项脏路径（23 个 docs/logo/*.png 删除 + 1 个 docs/小程序注册信息*.md 删除）均为其它窗口改动，未纳入本任务提交
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c376ce2` | feat(admin): 阶段10 管理模块——词库/用户/监控十接口（契约 §8） |
+| `624b978` | chore(release): 阶段11 收尾——一键自测/README/测试数据清理/供应商登记 |
+
+### Testing
+
+- [OK] 归档提交 c1c9d65 仅含 .trellis/tasks/** 19 项，docs/logo 0 项被卷入
+- [OK] 收尾会话未改代码；阶段 11 末基线 mvn -o test = 326 tests, 0 failures, 0 errors
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- ai-service 子任务：DeepSeek key 到位后补 AI 成功路径端到端验证
+- miniprogram 学生端 / admin-web 管理端为独立子任务（planning）
