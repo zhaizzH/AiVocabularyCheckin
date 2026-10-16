@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 5
+- **Total Sessions**: 6
 - **Last Active**: 2026-10-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~348 | Active |
+| `journal-1.md` | ~407 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 6 | 2026-10-16 | backend 阶段 8：AI 中转与降级（G5 通过） | `a097e6e`, `45eb7d8` | `main` |
 | 5 | 2026-10-16 | backend 阶段 7：学习/复习/错题核心闭环（G4 通过） | `748062d`, `76cf216` | `main` |
 | 4 | 2026-10-16 | backend 阶段 6：词库模块 + 种子导入（G3 通过） | `e140517` | `main` |
 | 3 | 2026-10-16 | backend 阶段 3+4：迁移脚本与实体/Mapper（G2 复核通过） | `b3713dc`, `d2a1ece`, `d8581ac` | `main` |

@@ -346,3 +346,62 @@
 ### Next Steps
 
 - 阶段 8 AI 中转与降级（契约 §6）→ G5
+
+
+## Session 6: backend 阶段 8：AI 中转与降级（G5 通过）
+<!-- trellis-session: v=2 fp=14cf5ba4f65371c2 -->
+
+**Date**: 2026-10-16
+**Task**: backend 阶段 8：AI 中转与降级（G5 通过）
+**Branch**: `main`
+
+### Summary
+
+实现契约 §6 三个 AI 接口与降级矩阵，ai-service 未启动时降级路径全绿；修掉 isTimeout 漏判生产超时异常类型的真缺陷，250 测试全绿。
+
+### Main Changes
+
+- `ai/AiMetrics`（内存埋点，design.md §6.3）：`AtomicLong` 计数 + `ConcurrentHashMap` 分特性
+  + `ConcurrentLinkedDeque` 环形降级事件（容量 100）；**降级也计入 total**。
+- `ai/AiServiceClient`：`callExample`(15s)/`callExplain`(30s)/`callReport`(60s)，
+  每次 `.setConnectTimeout(min(5000,timeout)).setReadTimeout(timeout).build()` 构造专用实例，
+  只抛 `AiCallException`（`isTimeout()` 区分 5001/5002），绝不暴露 `RestTemplate` 异常。
+- `AiServiceImpl` 三用例**降级矩阵**：`example` 内部捕获异常 → HTTP 200 +
+  `degraded:true` + 库内例句 + `mnemonic:""`（**显式注释「刻意吞异常，绝不抛 5001/5002」**）；
+  `explain` 错题不存在或不属于该用户 → **统一 4001**（避免 id 枚举探测他人错题）；
+  `report` 学习天数 < 3 → **5003 且不发起 HTTP**，`studyStats` 在 SQL 内聚合。
+- **修 1 个真缺陷（测试先失败暴露）**：`AiServiceClient#isTimeout()` 原只判
+  `java.net.SocketTimeoutException`。实测异常链为 `ResourceAccessException` →
+  `java.net.http.HttpTimeoutException`（Spring Boot 3.5 默认 `JdkClientHttpRequestFactory`），
+  与前者是**兄弟类（互不继承）** → **生产默认配置下所有真实超时都会被误判为 5002**。
+  修复为同时判两类超时，Javadoc 写明「超时判定的唯一真相源」，并以
+  `explainThrows5001OnRealTimeout` + `explainThrows5002WhenServiceDown` 锁死回归。
+- **降级测试禁用 Mock 伪造故障**：改用三个真实对端——`127.0.0.1:1`（连接被拒 → 5002）、
+  `testsupport/SilentHttpServer`（接受连接但永不响应 → 真实读超时 → 5001）、
+  `testsupport/StubAiServer`（真实 HTTP 校验字段名）。Mock 复现不出真实异常类型。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a097e6e` | feat(backend): 阶段 8 AI 中转与降级（契约 §6） |
+| `45eb7d8` | test(backend): G5 闸口通过——ai-service 未启动时降级路径全绿 |
+
+### Testing
+
+- [OK] mvn -o test → 250 tests, 0 failures, 0 errors（+19）
+- [OK] g5-smoke.py 24 PASS / 0 FAIL（ai-service 刻意未启动）
+- [OK] silent-ai-server.py 真实验证读超时 → explain 得 5001（非 5002），日志 WARN AI 降级 reason=TIMEOUT
+- [OK] 回归 g4-smoke.py 26 PASS，证明 StatsMapper.xml 增补未破坏既有聚合
+- [OK] 敏感信息核查：AppSecret/MySQL 密码/AppID/JWT 明文密钥/用户明文密码均 0 命中
+- [OK] 红线 anime_tracker 仍 20 表
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 阶段 9 统计模块（补 StatsService/StatsController）
+- 阶段 11 待办：application.yml 生产默认 com.vocab.mapper 由 DEBUG 改 INFO
