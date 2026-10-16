@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -54,9 +55,18 @@ class JwtUtilTest {
     void tamperedTokenReturnsNull() {
         JwtUtil util = newUtil();
         String token = util.generateToken(42L, "USER");
-        // 改动签名段的最后一个字符
-        String tampered = token.substring(0, token.length() - 1)
-                + (token.endsWith("A") ? "B" : "A");
+
+        // 篡改 payload（第二段）而非签名的最后一个字符：
+        // 32 字节 HMAC 的 base64url 签名共 43 字符，最后一个字符只承载 4 个有效位
+        // （剩余 2 位是填充位，解码时被丢弃）。若只改末字符的低位，
+        // 解码出的签名字节可能完全不变——导致该断言随机通过/失败（flaky）。
+        // 改 payload 则签名输入必然变化，校验一定失败，且与随机字节无关。
+        String[] parts = token.split("\\.");
+        char first = parts[1].charAt(0);
+        parts[1] = (first == 'A' ? 'B' : 'A') + parts[1].substring(1);
+        String tampered = parts[0] + "." + parts[1] + "." + parts[2];
+
+        assertNotEquals(token, tampered, "篡改后必须与原 token 不同");
         assertNull(util.parseToken(tampered));
     }
 

@@ -228,7 +228,7 @@ POST /checkin
 ```
 
 **幂等保证的双保险**：应用层查重（返回 3001）+ `study_record` 上加唯一索引
-`uk_study_record_user_word_date (user_id, word_id, study_date, study_type)`，
+`uk_study_record_user_word_date_type (user_id, word_id, study_date, study_type)`，
 防止并发重复打卡产生重复行。
 
 > 注：该唯一索引不在 S3 原文中，属于**加固措施**，需在 S3 修订时补充说明。
@@ -272,26 +272,40 @@ POST /checkin
 
 ### 4.5 统计聚合（SQL 内完成）
 
-热力图：
+> **日期列的选用（勿「顺手统一」）**：两个统计刻意用不同日期列——
+> 热力图按 `check_in_date`（S3 §7.5「打卡热力图按 `check_in_date` 聚合」、
+> 需求清单 §5.1、接口详细设计 §7.1 三处一致）；
+> 掌握度按 `study_date`（S3 §5.6）。
+> 语义差别：**复习不打卡**，但属于学习活动，故只在掌握度中体现。
+>
+> **时间边界由 Java 传入 `since` 参数**，不用 MySQL 专有的
+> `DATE_SUB(CURDATE(), INTERVAL n DAY)`：保证 H2（MySQL 模式）与真实 MySQL
+> 执行同一份 SQL，避免「测试通过、生产报错」的方言偏差，
+> 同时把「回溯多少天」这条业务规则显式留在 Service 层便于单测注入固定日期。
+
+热力图（近 12 周 = 84 天，对应接口 `?weeks=12`）：
 ```sql
-SELECT study_date AS date, COUNT(DISTINCT word_id) AS wordCount
+SELECT check_in_date AS date, COUNT(DISTINCT word_id) AS wordCount
 FROM study_record
-WHERE user_id = ? AND study_date >= DATE_SUB(CURDATE(), INTERVAL 84 DAY) AND deleted = 0
-GROUP BY study_date
+WHERE user_id = ? AND check_in_date IS NOT NULL
+  AND check_in_date >= ?   -- since = today - weeks*7，由 Java 计算
+  AND deleted = 0
+GROUP BY check_in_date
 ```
 `level` 在 Java 侧按 `0/1–10/11–20/21+` 分档（简单映射，不需要 SQL）。
 补齐缺失日期为 0（前端日历格需要连续日期序列，共 84 天 = 12 周）。
 
-掌握度曲线：
+掌握度曲线（近 30 天）：
 ```sql
 SELECT study_date AS date,
-       SUM(study_type='STUDY')  AS learnedCount,
-       SUM(study_type='REVIEW') AS reviewCount
+       SUM(CASE WHEN study_type='STUDY'  THEN 1 ELSE 0 END) AS learnedCount,
+       SUM(CASE WHEN study_type='REVIEW' THEN 1 ELSE 0 END) AS reviewCount
 FROM study_record
-WHERE user_id=? AND study_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND deleted=0
+WHERE user_id=? AND study_date >= ? AND deleted=0   -- since 由 Java 计算
 GROUP BY study_date
 ```
-`mistakeCount` 与 `masteryRate` 单独查（错题表按 `create_time` 的日期聚合 + 当前掌握比例）。
+`mistakeCount` 与 `masteryRate` 单独查（错题表按 `create_time` 的日期聚合 +
+`countMasteredMistakes/countTotalMistakes` 计算当前掌握比例）。
 
 ---
 

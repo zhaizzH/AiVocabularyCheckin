@@ -129,13 +129,85 @@
 - **红线**：`anime_tracker` 全程 20 表、最后建表时间未变（`UNCHANGED: True`）。
 - 构建回归：`mvn -o clean package` ✅ 37 测试全绿；两脚本已确认打入 jar 且与磁盘 md5 一致。
 
-## 4. 实体与 Mapper（阶段闸口：MyBatis-Plus 能读写 7 张表）
+## 4. 实体与 Mapper（阶段闸口：MyBatis-Plus 能读写 7 张表）—— **已完成**
 
-12. [ ] 7 个 `entity/` 类：`@TableName`、`@TableId(IdType.AUTO)`、`@TableLogic deleted`、`@TableField(fill=...)` 时间字段
-13. [ ] 7 个 `mapper/` 接口，继承 `BaseMapper<T>`
-14. [ ] `resources/mapper/StatsMapper.xml`（热力图/掌握度聚合）；逻辑删除条件**手工补 `deleted = 0`**（规范红线）
+12. [x] 7 个 `entity/` 类：`@TableName`、`@TableId(IdType.AUTO)`、`@TableLogic deleted`、`@TableField(fill=...)` 时间字段
+13. [x] 7 个 `mapper/` 接口，继承 `BaseMapper<T>`
+14. [x] `resources/mapper/StatsMapper.xml`（热力图/掌握度聚合）；逻辑删除条件**手工补 `deleted = 0`**（规范红线）
 
-**验证**：写一个 `@SpringBootTest` 或临时 `CommandLineRunner` 对每张表做一次 `selectCount(null)`，确认无 SQL 错误。
+**验证**：`@SpringBootTest`（H2）对 7 张表做 `selectCount(null)` + 全字段往返，无 SQL 错误。
+
+**阶段 4 实施记录（已完成，54 测试全绿）**：
+
+产出文件：
+- `entity/`：`User` / `WordBook` / `Word` / `UserWordBook` / `StudyRecord` /
+  `MistakeEntry` / `WordProgress`。全部 `@TableName` + `@TableId(AUTO)`；
+  时间列标 `@TableField(fill=INSERT / INSERT_UPDATE)`（G2 新约束的兑现）；
+  6 个业务表带 `@TableLogic deleted`；`user_word_book` 无 `deleted`（物理删除）。
+- `mapper/`：7 个 `BaseMapper<T>` 接口 + `StatsMapper`。
+- `resources/mapper/StatsMapper.xml`：热力图 / 掌握度聚合（每个查询**手写 `deleted = 0`**）。
+- `config/JacksonConfig.java`：JSR-310 全局格式（`yyyy-MM-dd HH:mm:ss` / `yyyy-MM-dd`）。
+  必要性：`spring.jackson.date-format` **对 JSR-310 无效**，漏配则契约 §1.4 的
+  `createTime` 会输出带 `T` 的 ISO 字符串。
+- `dto/response/`：`HeatmapDay` / `MasteryPoint`（无参构造 + setter，供 MyBatis 映射）。
+- 测试：`EntityMappingIntegrationTest`（17）+ `test/resources/schema-h2.sql`。
+
+**关键设计取舍（本阶段新增，已记入 design.md）**：
+1. **统计的时间边界改由 Java 传入 `since` 参数**，不用 MySQL 专有的
+   `DATE_SUB(CURDATE(), INTERVAL n DAY)`。原因：H2（MySQL 模式）不实现该函数，
+   原写法导致 `mvn test` 报 `Function "date_sub" not found`。
+   改为参数化后 **H2 与真实 MySQL 执行同一份 SQL**（消除方言偏差），
+   且「回溯多少天」这条业务规则显式落在 Service 层、便于单测注入固定日期。
+2. **热力图按 `check_in_date` 聚合**（非 `study_date`）：S3 §7.5 + 需求清单 §5.1 +
+   接口详细设计 §7.1 三处一致。语义：**复习不打卡**，但属于学习活动，
+   故复习只体现在掌握度（按 `study_date`）中。
+   （此项修正了 design.md 草稿里误用 `study_date` 的写法。）
+3. `mistake_entry` 的 `deleted` 仍是 `NOT NULL DEFAULT 0`（业务标志位，非时间戳），
+   与「时间列去 DB 默认值」的 G2 决策不冲突。
+
+**发现的真实缺陷（已修复）**：JDBC URL 中写 `characterEncoding=utf8mb4`。
+`Connector/J` 用 `Charset.forName()` 解析该参数，而 `utf8mb4` **不是合法 Java 字符集名**
+（实测 `FAIL utf8mb4`），连接直接失败：`Unsupported character encoding 'utf8mb4'`。
+阶段 2 起潜伏至今，因从未有代码真正连库而未暴露。
+已改为 `characterEncoding=UTF-8`（Connector/J 8 会自动映射到服务端 utf8mb4，
+中文/emoji 正常）——涉及 `application.yml` / `application-local.yml` /
+`application-local.yml.example` 三处。
+
+**另外修复两处与阶段 4 无关但同期暴露的隐患**：
+
+3. **`JwtUtilTest.tamperedTokenReturnsNull` 是 flaky 测试**（~6% 概率误报，阶段 2 遗留）：
+   原断言篡改 token 签名段**最后一个字符**。32 字节 HMAC 的 base64url 签名共 43 字符
+   （258 位 > 数据 256 位），末字符低 2 位是**填充位、解码时被丢弃**——
+   改这些位得到的签名字节与原串完全相同，校验自然通过。
+   实测模拟 2000 次：**6.0% 概率改写后签名不变**。
+   已改为篡改 payload 首字符（签名输入必然变化，与随机字节无关），
+   并加 `assertNotEquals(token, tampered)` 钉住「确实改了」。
+   `JwtUtilTest` 连跑 12 次全绿（修复前约 6% 概率失败）。
+4. **`mapper/`、`db/`、`resources/mapper/` 下的 `.gitkeep` 冗余且会打入 jar**：
+   这些目录已有真实内容，`.gitkeep` 已删（产物里确认不再出现）。
+
+**为何 `mvn test` 通过还不足以证明本阶段**：`mvn test` 跑在 H2 + **手写的**
+`schema-h2.sql` 上，若手抄稿与 `V001/V002` 漂移，测试会在「与生产不同的结构」下全绿。
+故本阶段额外做了**两重独立于 JUnit 的验证**（均可重复执行）：
+
+| 脚本 | 作用 | 结果 |
+| --- | --- | --- |
+| `backend/scripts/verify-schema-entities.py` | 解析 Java 实体源码 ↔ 直连真实 MySQL `INFORMATION_SCHEMA`，**双向**核对列名；检查 `fill` 标注、`deleted`/`@TableLogic` 一致性、NOT NULL 无默认值列是否都有实体字段承载 | ✓ 7 实体 / 67 列全部一致 |
+| `backend/scripts/verify-h2-schema-parity.py` | `schema-h2.sql` ↔ `V001/V002` 结构核对（表/列/类型/可空性/唯一约束） | ✓ 无漂移 |
+
+以及一个面向**真实 MySQL** 的集成测试（默认跳过，需显式开启）：
+`mvn -o test -Dmysql.it=true -Dtest=RealMysqlMappingIT -DfailIfNoTests=false`
+——在真实 MySQL（`STRICT_TRANS_TABLES` + 时间列无默认值）上插入不设时间戳的实体，
+**证明 `@TableField(fill=...)` 确实兜住了 `1364`**；并验证热力图/掌握度 XML
+在 MySQL 方言下同样可执行。测试类 `@Transactional`，结束后精确计数 7 表 = 0。
+
+**闸口验证实测**：
+- `mvn -o clean test`：**56 测试全绿**（阶段 2 的 37 + 本阶段 19）。
+- `RealMysqlMappingIT`：真实 MySQL 上 7 表插入/读回/聚合/**update 刷新 updateTime** 全通过。
+- 掌握度聚合断言**变异测试已验证其有效**：把错题关联表故意改成 `word_progress`，
+  新断言立即报错（证明不是「只断言 size()」的空壳测试）。
+- 事务回滚核实：7 表精确 `COUNT(*)` 全为 0（无数据残留）。
+- 红线：`anime_tracker` 仍 20 表，未被触碰。
 
 ## 5. 认证模块（阶段闸口：5 个 auth 接口自测通过）
 

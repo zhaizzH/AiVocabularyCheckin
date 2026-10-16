@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!--
+  统计聚合 SQL。
+
+  规范红线（spec/database-guidelines.md）：
+    1. 手写 XML 不会自动附加逻辑删除条件——每个查询必须手工写 `deleted = 0`。
+    2. 聚合在 SQL 内完成，不把原始记录加载到 Java 内存（需求清单 §5.1）。
+    3. GROUP BY 聚合用 Wrapper 无法表达，属规范允许的 XML 使用场景。
+
+  日期列的选用（刻意区分，勿「顺手统一」）：
+    * 热力图 → check_in_date：热力图刻画「打卡」行为（S3 §7.5 明确按此列聚合）。
+    * 掌握度 → study_date  ：掌握度刻画「学习活动」，复习不打卡但属于学习（S3 §5.6）。
+
+  时间边界统一由 Java 传入 `since` 参数，不用 MySQL 专有的
+  DATE_SUB(CURDATE(), INTERVAL n DAY)——保证 H2 测试与 MySQL 生产
+  执行同一份 SQL（避免「测试通过、生产报错」的方言偏差）。
+-->
+<mapper namespace="com.vocab.mapper.StatsMapper">
+
+    <!-- 热力图：按打卡日期聚合每日学习词数，只统计真实打卡过的日子 -->
+    <select id="selectHeatmap" resultType="com.vocab.dto.response.HeatmapDay">
+        SELECT r.check_in_date            AS `date`,
+               COUNT(DISTINCT r.word_id)  AS wordCount
+        FROM study_record r
+        WHERE r.user_id = #{userId}
+          AND r.deleted = 0
+          AND r.check_in_date IS NOT NULL
+          AND r.check_in_date &gt;= #{since}
+        GROUP BY r.check_in_date
+        ORDER BY r.check_in_date ASC
+    </select>
+
+    <!--
+      掌握度曲线：按学习日期聚合。
+        * learnedCount = 当日 STUDY 型记录数
+        * reviewCount  = 当日 REVIEW 型记录数
+        * mistakeCount = 当日新增错题数（按 mistake_entry.create_time 的日期）
+        * masteryRate  = 由 Java 侧按「已掌握 / 总错题」统一计算（见 StatsService）
+    -->
+    <select id="selectMasteryDaily" resultType="com.vocab.dto.response.MasteryPoint">
+        SELECT r.study_date AS `date`,
+               SUM(CASE WHEN r.study_type = 'STUDY'  THEN 1 ELSE 0 END) AS learnedCount,
+               SUM(CASE WHEN r.study_type = 'REVIEW' THEN 1 ELSE 0 END) AS reviewCount,
+               COALESCE(MAX(m.mistakeCount), 0) AS mistakeCount
+        FROM (
+            SELECT user_id, study_date, study_type
+            FROM study_record
+            WHERE user_id = #{userId}
+              AND deleted = 0
+              AND study_date &gt;= #{since}
+        ) r
+        LEFT JOIN (
+            SELECT user_id, DATE(create_time) AS mistakeDate, COUNT(*) AS mistakeCount
+            FROM mistake_entry
+            WHERE user_id = #{userId}
+              AND deleted = 0
+            GROUP BY user_id, DATE(create_time)
+        ) m ON m.user_id = r.user_id AND m.mistakeDate = r.study_date
+        GROUP BY r.study_date
+        ORDER BY r.study_date ASC
+    </select>
+
+    <!-- 掌握度分子：已掌握错题数（分母为 countTotalMistakes） -->
+    <select id="countMasteredMistakes" resultType="int">
+        SELECT COUNT(*)
+        FROM mistake_entry
+        WHERE user_id = #{userId}
+          AND deleted = 0
+          AND mastered = 1
+    </select>
+
+    <!-- 掌握度分母：错题总数（含已掌握） -->
+    <select id="countTotalMistakes" resultType="int">
+        SELECT COUNT(*)
+        FROM mistake_entry
+        WHERE user_id = #{userId}
+          AND deleted = 0
+    </select>
+
+    <!-- 累计打卡天数：不同 check_in_date 的天数 -->
+    <select id="countCheckInDays" resultType="int">
+        SELECT COUNT(DISTINCT check_in_date)
+        FROM study_record
+        WHERE user_id = #{userId}
+          AND deleted = 0
+          AND check_in_date IS NOT NULL
+    </select>
+
+    <!-- 累计已学单词数：word_progress 中 learned=1 的词数（跨词书天然去重） -->
+    <select id="countLearnedWords" resultType="int">
+        SELECT COUNT(*)
+        FROM word_progress
+        WHERE user_id = #{userId}
+          AND deleted = 0
+          AND learned = 1
+    </select>
+
+    <!-- 指定词书的已学词数（契约 §2.1 的 learnedCount） -->
+    <select id="countLearnedWordsInBook" resultType="int">
+        SELECT COUNT(*)
+        FROM word_progress
+        WHERE user_id = #{userId}
+          AND book_id = #{bookId}
+          AND deleted = 0
+          AND learned = 1
+    </select>
+
+</mapper>

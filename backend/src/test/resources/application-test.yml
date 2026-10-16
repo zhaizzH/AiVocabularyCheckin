@@ -1,14 +1,23 @@
+# =====================================================================
 # 测试专用配置：用 H2 内存库替代 MySQL，使单测不依赖本机数据库。
 # H2 以 MySQL 兼容模式运行，尽量贴近真实方言。
+# =====================================================================
 spring:
   datasource:
     driver-class-name: org.h2.Driver
-    url: jdbc:h2:mem:vocab_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    # MODE=MySQL        : 采用 MySQL 方言（DATE_SUB/CURDATE/反引号等）
+    # DATABASE_TO_LOWER : 与真实 MySQL 的库表小写命名一致
+    # NON_KEYWORDS=USER  : `user` 在 H2 中是保留字，真实 MySQL 8 中不是
+    #                      （已实测 INFORMATION_SCHEMA.KEYWORDS.RESERVED=0）；
+    #                      不加此项则 `user` 表名无法直接使用。
+    url: jdbc:h2:mem:vocab_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;NON_KEYWORDS=USER,VALUE,KEY,LEVEL,SOURCE,STATUS,ROLE,CORRECT
     username: sa
     password: ""
   sql:
     init:
-      mode: never
+      # 每次测试用 schema-h2.sql 建表（该文件是 V001/V002 的 H2 等价翻译）
+      mode: always
+      schema-locations: classpath:schema-h2.sql
 
 jwt:
   secret: test-secret-key-for-vocab-backend-unit-tests-32b
