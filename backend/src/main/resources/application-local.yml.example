@@ -1,0 +1,29 @@
+# =====================================================================
+# 本地开发配置模板
+#
+# 用法：复制本文件为 application-local.yml，填入真实值。
+#   cp application-local.yml.example application-local.yml
+#
+# application-local.yml 已被 .gitignore 排除，绝不会入库。
+# 本模板本身不含任何真实凭据，可以安全提交。
+# =====================================================================
+spring:
+  datasource:
+    username: root
+    # 填入本机 MySQL 密码
+    password: your-mysql-password
+    url: jdbc:mysql://127.0.0.1:3306/ai_vocab?useUnicode=true&characterEncoding=utf8mb4&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+
+# 本地开发密钥。生成方式：openssl rand -base64 48
+# 仅供本机使用，切勿用于任何真实部署。
+jwt:
+  secret: change-me-to-a-random-string-of-at-least-32-bytes
+
+# 微信小程序凭据（可选）。留空则 wx-login 返回 1004，账号密码登录不受影响。
+wx:
+  appid: ""
+  secret: ""
+
+logging:
+  level:
+    com.vocab: DEBUG

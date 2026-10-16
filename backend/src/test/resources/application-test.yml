@@ -1,0 +1,20 @@
+# 测试专用配置：用 H2 内存库替代 MySQL，使单测不依赖本机数据库。
+# H2 以 MySQL 兼容模式运行，尽量贴近真实方言。
+spring:
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:vocab_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password: ""
+  sql:
+    init:
+      mode: never
+
+jwt:
+  secret: test-secret-key-for-vocab-backend-unit-tests-32b
+  expire-ms: 3600000
+
+logging:
+  level:
+    root: WARN
+    com.vocab: INFO

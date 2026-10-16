@@ -1,0 +1,118 @@
+# =====================================================================
+# 基础配置（提交入库）
+#
+# 安全约定：本文件不得出现任何明文密码/密钥。
+#   全部敏感值走环境变量占位符，缺省值仅用于本地开发。
+#   本地真实凭据写在 application-local.yml（已被 .gitignore 排除）。
+# =====================================================================
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: vocab-backend
+
+  # 默认激活 local profile，便于本机与课设演示；生产用 --spring.profiles.active=prod 覆盖
+  profiles:
+    active: local
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:ai_vocab}?useUnicode=true&characterEncoding=utf8mb4&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 10000
+
+  # 上传词库 JSONL 文件：三本词书单文件 7-10MB，留足余量
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 60MB
+
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: always
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    # SQL 日志走 SLF4J（DEBUG 级别开启），不手工打印 SQL
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+    # 查询结果为 null 的字段也返回，避免前端拿到缺字段的对象
+    call-setters-on-nulls: true
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+      # 逻辑删除全局约定：deleted 0=未删除 1=已删除
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  mapper-locations: classpath*:mapper/**/*.xml
+
+# ---------------------------------------------------------------------
+# JWT
+#
+# 安全约定：本文件**不含任何默认密钥**，JWT_SECRET 必须由
+#   ① 环境变量 JWT_SECRET，或
+#   ② application-local.yml（已被 gitignore 排除）
+# 提供。缺失时应用会启动失败（fail-fast）——刻意如此：
+# 宁可启动失败，也不要一个「带着开发默认密钥」的实例被部署到生产。
+#
+# 生成密钥：openssl rand -base64 48   （HS256 要求 >= 32 字节）
+# ---------------------------------------------------------------------
+jwt:
+  secret: ${JWT_SECRET}
+  # 有效期（毫秒）：7 天，与《接口详细设计》§1.2 一致
+  expire-ms: 604800000
+
+# ---------------------------------------------------------------------
+# AI 微服务（FastAPI + LangChain）
+# 业务后端是唯一知道 ai-service 地址的一方；前端绝不直接请求。
+# ---------------------------------------------------------------------
+ai:
+  service:
+    base-url: ${AI_SERVICE_BASE_URL:http://127.0.0.1:8000}
+    # 三个功能的超时（毫秒），与契约 §9 一致
+    example-timeout-ms: 15000
+    explain-timeout-ms: 30000
+    report-timeout-ms: 60000
+
+# ---------------------------------------------------------------------
+# 微信小程序（code2Session 真实调用）
+# ⚠️ 无 AppID 时 wx-login 会返回 1004；账号密码登录不受影响。
+# ---------------------------------------------------------------------
+wx:
+  appid: ${WX_APPID:}
+  secret: ${WX_SECRET:}
+  code2session-url: https://api.weixin.qq.com/sns/jscode2session
+
+# ---------------------------------------------------------------------
+# 跨域（仅服务管理端浏览器；小程序走 wx.request 不受 CORS 限制）
+# 生产部署时用 CORS_ALLOWED_ORIGINS 覆盖为真实管理端域名。
+# ---------------------------------------------------------------------
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+
+# ---------------------------------------------------------------------
+# 业务常量（与 common/Constants.java 保持一致，供配置项覆盖）
+# ---------------------------------------------------------------------
+vocab:
+  daily-new-words: 20
+  # 种子词库导入开关：默认关闭，避免每次启动重跑
+  seed: false
+  seed-dir: ../data/vocab-source
+
+logging:
+  level:
+    root: INFO
+    com.vocab: DEBUG
+    # MyBatis-Plus SQL 日志
+    com.vocab.mapper: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"

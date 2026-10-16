@@ -1,0 +1,14 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "后端规范入口：目录结构、数据库、错误处理、质量、日志五份规范的索引与编写代码前必读清单"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "backend/ 三层架构布局与命名规范（包根 com.vocab、controller/service/mapper/entity/dto/common/config）、调用方向单向约束"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "MyBatis-Plus 使用规范：LambdaQueryWrapper 优先、Page 分页强制、saveBatch 批量、SQL 迁移脚本命名与公共字段、逻辑删除、禁止循环单条插入"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Result 包装结构、BizException + 全局异常处理器模式、错误码 1xxx-9xxx 分段、AI 降级作为一等错误路径的要求、业务失败 HTTP 保持 200"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "禁用/必须模式清单（Controller 不写业务逻辑、不返回实体、不吞异常、不硬编码密钥）、测试要求（Service 层规则单测 + AI 降级集成测试）、评审清单"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "SLF4J 使用、日志级别划分（INFO 业务事件/WARN 可恢复如 AI 降级/ERROR 带堆栈）、AI 调用必须记录功能名与耗时、登录失败不记密码"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "跨层改动思考指南：接口契约/DTO/错误码变更必须同步前端，本任务涉及契约文档回写"}
+{"file": "docs/接口详细设计.md", "reason": "字段级冻结契约（唯一事实源）：全部接口路径、请求/响应字段、错误码总表、分页结构、日期格式。实现必须逐字段对齐，不得自创字段"}
+{"file": "docs/需求清单-功能与规则.md", "reason": "行为规则与边界的落地细化：打卡连续天数规则、3001 幂等、间隔复习序列、错题去重不重建条目、空态与降级文案、明确不做清单"}
+{"file": ".trellis/tasks/10-16-backend-api/research/11-s3-database-excerpt.md", "reason": "S3 第 7 章数据库设计全文摘录：7 张表的完整字段/类型/说明、索引清单与命名、实体关系、逻辑删除与公共字段约定——建表脚本的唯一依据"}
+{"file": ".trellis/tasks/10-16-backend-api/research/10-s3-architecture-excerpt.md", "reason": "S3 3.1-3.7 摘录：分层架构硬约束（ai-service 不连库）、业务后端包结构 com.vocab 各包职责、服务模块职责划分、AI 微服务目录结构、域模型关键字段"}
+{"file": ".trellis/tasks/10-16-aivocab-fullstack/research/00-environment-and-contract-gaps.md", "reason": "实测环境事实（MySQL 8.4.9/root 可用、现有库 anime_tracker 不得改动）、词库源实测行数与字段映射、契约缺口决策（word_progress 表 / 管理端补齐接口）、依赖源可达性"}
+{"file": ".trellis/tasks/10-16-backend-api/design.md", "reason": "backend 技术设计：7 张表 DDL、核心算法（计划生成/打卡streak/间隔复习/错题去重/统计聚合）、JWT 与禁用即时生效、AI 超时与降级矩阵、词库导入单一解析实现、权衡与回滚"}
+{"file": ".trellis/tasks/10-16-backend-api/implement.md", "reason": "执行计划：11 个阶段的顺序清单、每阶段验证命令、7 个评审闸口、验证命令速查与回滚点——按阶段推进并逐闸口确认"}

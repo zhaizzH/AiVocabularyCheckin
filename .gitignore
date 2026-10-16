@@ -1,10 +1,47 @@
+# Secrets & local-only config (NEVER commit)
+.env
+.env.*
+!.env.example
+application-local.yml
+application-local.yaml
+application-local.properties
+*.local.yml
+*local-config*
+
+# Local AI tooling scratch (contains MCP tokens)
+.tmp/
+.vocab-checkin-tmp/
+
+# Vocab source data (7-10MB per file, fetched by script, not committed)
+data/vocab-source/*.jsonl
+data/vocab-source/*.json
+data/*.jsonl
+
 # Python
 __pycache__/
 *.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
 
 # Node
 node_modules/
+dist/
+.vite/
+
+# Java / Maven
+target/
+*.class
+
+# Mini program local build output
+miniprogram/.dist/
+project.private.config.json
 
 # OS / editors
 .DS_Store
+Thumbs.db
 *.swp
+.idea/
+.vscode/*
+!.vscode/settings.json

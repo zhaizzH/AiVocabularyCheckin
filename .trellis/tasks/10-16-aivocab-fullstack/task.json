@@ -1,0 +1,31 @@
+{
+  "id": "aivocab-fullstack",
+  "name": "aivocab-fullstack",
+  "title": "AI单词学习打卡系统 全栈实现（S4 程序包）",
+  "description": "按 docs/ 下冻结的 S2/S3/接口契约实现四端系统：backend(Spring Boot)+ai-service(FastAPI)+miniprogram(微信原生)+frontend(React+AntD)；父任务持有需求集、子任务映射、跨子任务验收与集成评审",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "zhaizzH",
+  "assignee": "zhaizzH",
+  "createdAt": "2026-10-16",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "10-16-backend-api",
+    "10-16-ai-service",
+    "10-16-miniprogram-student",
+    "10-16-admin-web"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

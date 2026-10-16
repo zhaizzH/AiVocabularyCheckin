@@ -1,0 +1,10 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "评审清单：分层正确性、Result 包装复用、无敏感信息、列表分页、AI 降级路径已验证、数据库变更附迁移脚本、契约一致性——用于逐条核对实现"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "核对错误码使用是否符合分段语义、业务失败是否保持 HTTP 200、401/403/500 是否仅按契约语义使用、是否吞异常或透传内部错误消息"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "核对索引与逻辑删除、统计查询是否在 SQL 内聚合（未加载原始记录到内存）、是否存在循环单条插入、Mapper XML 是否手工补 deleted = 0"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "检查日志中是否泄露密码/token/AI key、AI 调用是否记录功能名与耗时、是否使用 SLF4J {} 占位符而非字符串拼接"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "核对包结构与命名、Controller 是否越层调用 Mapper、是否暴露实体而非 DTO、ai-service 是否出现数据库连接"}
+{"file": "docs/接口详细设计.md", "reason": "逐字段 diff 的比对基准：路径、字段名与类型、错误码、分页结构、日期时间格式；补齐的管理端接口是否已回写本文档"}
+{"file": "docs/需求清单-功能与规则.md", "reason": "业务规则正确性核对基准：streak 规则、打卡幂等 3001、间隔复习 1/3/7/15、错题 wrong_count 累加不重建、avatar 白名单、降级文案"}
+{"file": ".trellis/tasks/10-16-backend-api/prd.md", "reason": "验收标准的权威来源：功能正确性、契约一致性、降级与安全、可交付性四组复选框，逐条验证"}
+{"file": ".trellis/tasks/10-16-backend-api/design.md", "reason": "核对实现是否偏离设计：算法语义（答对升阶段并用新 stage 计算间隔）、ai/example 降级不抛异常、禁用即时生效每请求查库、唯一索引加固"}
+{"file": ".trellis/tasks/10-16-aivocab-fullstack/prd.md", "reason": "父任务跨子任务验收标准：契约一致性、包装与错误码、AI 降级一等约束、鉴权与安全、数据正确性、端到端可演示"}
