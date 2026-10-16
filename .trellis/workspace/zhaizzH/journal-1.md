@@ -65,3 +65,74 @@
 
 - 阶段 3：数据库迁移脚本 V001__init.sql（6 表）+ V002__word_progress.sql，验证可重复执行 → 闸口 G2
 - 阶段 4-11：实体+Mapper → 认证（阶段5接入 UserStatusValidator 真实实现）→ 词库+种子导入（G3）→ 学习/复习/错题（G4）→ AI 降级（G5）→ 统计 → 管理（先回写契约 G6）→ 收尾（G7）
+
+---
+
+## 2026-10-16 — backend-api 阶段 4：实体与 Mapper
+
+### Goal
+
+7 张表建 MyBatis-Plus 实体 + Mapper + 统计聚合 XML，过闸口（MyBatis-Plus 能读写 7 张表）。
+
+### Done
+
+- entity/ 7 个：User / WordBook / Word / UserWordBook / StudyRecord / MistakeEntry / WordProgress
+  - 时间列统一标 @TableField(fill=INSERT / INSERT_UPDATE)（G2 去 DB 默认值后的必填约束）
+  - 6 表 @TableLogic deleted；user_word_book 物理删除、无 deleted（全项目唯一）
+- mapper/ 7 个 BaseMapper + StatsMapper；resources/mapper/StatsMapper.xml（7 个查询，逐个手写 deleted = 0）
+- config/JacksonConfig：JSR-310 全局格式 yyyy-MM-dd HH:mm:ss / yyyy-MM-dd
+  （spring.jackson.date-format 对 JSR-310 无效，漏配会让 createTime 输出带 T 的 ISO 串）
+- dto/response/HeatmapDay、MasteryPoint
+- 测试 EntityMappingIntegrationTest（H2，19）+ RealMysqlMappingIT（真实 MySQL，默认跳过）
+- scripts/verify-schema-entities.py（实体↔真实库双向核对）、verify-h2-schema-parity.py（H2↔V001/V002 漂移检测）
+
+### 修复的真实缺陷
+
+1. JDBC URL characterEncoding=utf8mb4 → Connector/J 用 Charset.forName 解析，utf8mb4 非法 →
+   连接直接失败（Unsupported character encoding 'utf8mb4'）。阶段 2 起潜伏，因从未真正连库而未暴露。
+   三处 URL 改 UTF-8。
+2. StatsMapper.xml 用 MySQL 专有 DATE_SUB(CURDATE(),...) → H2 报 Function "date_sub" not found。
+   改为起始日期由 Java 计算后作 since 参数传入：H2 与真实 MySQL 执行同一份 SQL，
+   且「回溯多少天」显式落在 Service 层。
+3. JwtUtilTest.tamperedTokenReturnsNull 是 flaky 测试：原断言改签名段末字符，
+   而 32 字节 HMAC 的 base64url 末字符低 2 位是填充位、解码时丢弃 → 实测 6.0% 概率
+   改写后签名字节完全相同。改为篡改 payload 首字符；连跑 12 次全绿。
+
+### 设计修正
+
+- 热力图按 check_in_date 聚合（S3 §7.5 + 需求清单 §5.1 + 接口设计 §7.1 三处一致）；
+  design.md §4.5 草稿误写 study_date，已改并补注「复习不打卡但属学习活动」（掌握度用 study_date）。
+- 掌握度 mistakeCount 改 COALESCE(MAX(...))，GROUP BY 只按 study_date，消除按关联聚合值分组的脆弱写法。
+- 删除冗余 .gitkeep（目录已有真实内容且会打入 jar）；UserWordBookMapper 注释纠正（物理删除无 @TableLogic）。
+
+### 安全
+
+- 校验脚本初版把 DB 密码写成默认值（违反禁硬编码凭证红线），改为无默认值 + 缺密码 fail-fast。
+- 该密码曾随研究文档误入提交 23720a3：因无 git remote，已 reset --soft 折叠重提 + reflog expire + gc prune，
+  全历史 git grep 三个敏感串均 0 命中，污染对象已不可访问。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d8581ac` | feat(backend): 阶段 4 实体与 Mapper — 7 表映射 + 统计聚合 |
+
+### Testing
+
+- [OK] mvn -o clean test：56 全绿（阶段 2 的 37 + 本阶段 19），连跑 3 次稳定
+- [OK] RealMysqlMappingIT（-Dmysql.it=true）：真实 MySQL 8.4.9 + ONLY_FULL_GROUP_BY 上 7 表
+  插入/读回/聚合/update 刷新 updateTime 全通过；事务回滚，7 表精确计数 = 0
+- [OK] 掌握度断言经变异测试证明有效（错题关联表改错 → 测试立刻失败）
+- [OK] 校验脚本：实体 7 / 67 列双向一致；schema-h2.sql 与 V001/V002 无漂移
+- [OK] 红线：anime_tracker 20 表未动；无 System.out / 空 catch / 硬编码密钥
+
+### Status
+
+[OK] **Completed**（阶段 4；本阶段无独立闸口，下一闸口为 G3）
+
+### Next Steps
+
+- 阶段 5 认证模块：AuthService 落地 UserStatusValidator 真实实现（查 user.status，
+  使「管理员禁用 → 该用户 JWT 立即失效 1003」生效）+ 真实 AppID/AppSecret 走 code2Session
+- 阶段 6 词库与种子导入 → 闸口 G3（三本词书计数 7508/5651/9602 严格一致）
+- 阶段 7 学习/复习/错题 → 闸口 G4；阶段 8 AI 降级 → G5；阶段 10 前回写契约 → G6；阶段 11 收尾 → G7
