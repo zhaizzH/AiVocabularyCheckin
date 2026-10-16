@@ -33,7 +33,12 @@ import urllib.request
 
 import pymysql
 
-BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8080"
+BASE = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("BASE", "http://127.0.0.1:8080")
+
+DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
+DB_PORT = int(os.environ.get("DB_PORT", "3306"))
+DB_USER = os.environ.get("DB_USERNAME", "root")
+DB_NAME = os.environ.get("DB_NAME", "ai_vocab")
 DBPASS = os.environ["DBPASS"]
 
 PASS, FAIL = [], []
@@ -107,8 +112,8 @@ def finish_plan_and_checkin(token):
 
 # ===============================================================
 def main():
-    conn = pymysql.connect(host="127.0.0.1", port=3306, user="root", password=DBPASS,
-                           database="ai_vocab", charset="utf8mb4", autocommit=True)
+    conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DBPASS,
+                           database=DB_NAME, charset="utf8mb4", autocommit=True)
     cur = conn.cursor()
     print("== 阶段 10 管理模块冒烟 %s（真实 jar + 真实 MySQL）==" % BASE)
 

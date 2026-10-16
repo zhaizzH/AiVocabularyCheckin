@@ -470,16 +470,29 @@ word 总行数: 22761 = 7508+5651+9602
 - 契约口径冻结于 V1.1 §8（10 接口 = 7 契约原稿 + 3 补齐），编码严格照此执行。
 - **测试连带影响（已修）**：管理端 Controller 落地后 `/api/admin/users` 由「404 证明已过鉴权」变为「200 命中真实 Controller」，`JwtInterceptorIntegrationTest` 中两处硬编码 404 断言随之失效。改为语义断言「**非 401/403 即已过拦截器**」（常量 `AUTH_PASSED=200`），避免每新增一个管理端接口就误报一次。
 
-## 11. 收尾（阶段闸口 G7：可交付）—— **未开始**
+## 11. 收尾（阶段闸口 G7：可交付）—— **实施全部完成，等待人工确认 G7**
 
-47. [ ] `backend/README.md`：环境要求、建库、脚本执行顺序、环境变量清单、种子导入、启动、自测方法
-48. [ ] `scripts/smoke-test.sh`：一键跑通全部接口断言（含降级路径）
-49. [ ] `mvn -q clean package` 全绿（含测试）
-50. [ ] 自查 `prd.md` 的**每一条**验收标准，逐条打勾
+47. [x] `backend/README.md`：环境要求、建库、脚本执行顺序、环境变量清单、种子导入、启动、自测方法（已重写：138→约 300 行，含 33 接口总览、错误码总表、脚本清单、与 ai-service 边界）
+48. [x] `scripts/smoke-test.sh`：一键跑通全部接口断言（含降级路径）——落 `backend/scripts/smoke-test.sh`（自动拉起服务 + 5 个冒烟 + `mvn -o test` + 汇总 + 日志 ERROR 计数）+ 根目录转发入口 `scripts/smoke-test.sh`
+49. [x] `mvn -o clean package` 全绿（含测试）
+50. [x] 自查 `prd.md` 的**每一条**验收标准，逐条打勾
 
-> **阶段 11 额外待办**（阶段 8 G5 发现）：`application.yml` 生产默认
-> `com.vocab.mapper: DEBUG` 会打印 `password_hash` 的 BCrypt 哈希
-> → 生产默认改 `INFO`，`mapper` DEBUG 仅保留在本地 profile。
+**阶段 11 实施记录**：
+
+- **`application.yml` 生产默认已收紧**：`com.vocab.mapper: DEBUG` → **`INFO`**（阶段 8 G5 发现：DEBUG 会把 `user.password_hash` 的 BCrypt 哈希打进日志）。本地要看 SQL 时在 `application-local.yml` 单独设 DEBUG。
+- **契约补记（供应商登记）**：`docs/S3-...-正文.md` V1.3→**V1.4**（§3.5 补 DeepSeek 供应商与「OpenAI 兼容、只换 base_url/model」的可替换性 + §1.6 版本表补行）；`docs/接口详细设计.md` V1.1→**V1.2**（§9 补同一说明 + §10 变更记录补行）。**只补记说明、不改任何字段契约。**
+- **一键自测实测**：`DBPASS=... bash backend/scripts/smoke-test.sh` → **exit 0，全部通过**：G4 26 / G4 跨日 18 / G5 24 / 阶段 9 29 / 阶段 10 46（合计 143 用例全 PASS），`mvn -o test` 326 全绿，服务日志 ERROR=0。
+- **踩坑记录（脚本健壮性）**：第一版 `smoke-test.sh` 用 `grep -c` 统计中文输出，在 GBK 终端下把 46 PASS 数成 47（多计了脚本自身打印的 `PASS:` 汇总行前缀）→ 改为**用 python 解析输出统计**（去 ANSI、按行前缀计数、排除 `PASS:`/`FAIL:` 汇总行），并顺手改用 python 解析 `mvn` 的 `Tests run` 行与日志 ERROR 计数。另：`stage10-admin-smoke.py` 里含一个 U+2212 减号字符，在 GBK 终端直接 `UnicodeEncodeError` 崩溃 → 已替换为 ASCII `-`。
+- **冒烟脚本可移植性**：5 个冒烟脚本统一支持「`argv[1]` → `BASE` 环境变量 → 默认
+  `http://127.0.0.1:8080`」与 `DB_HOST/DB_PORT/DB_USERNAME/DB_NAME`，便于指向远程实例；
+  **只改连接参数来源，未动任何断言，也未放松「只碰自己前缀数据」的红线**。
+- **新增 `backend/scripts/clean-smoke-data.py`**：G7 前复核发现 `user` 表累积了 49 个冒烟测试账号
+  （`g4*`/`g5*`/`stage9*` 因无管理员会话无法自删）+ 1 个阶段 5 早期 `/tmp` 脚本遗留的
+  `s<时间戳>` 账号。新增按**前缀白名单**（`_`/`%` 转义为字面量）的清理脚本，
+  连带清 4 张关联表，末尾复核种子数据不变（3 本词书 / 22761 词），支持 `--dry-run`。
+  **刻意不接入 `smoke-test.sh` 自动执行**——删数据须可见。
+
+> 阶段 11 详细记录见 `research/11-stage11-final-review.md`（含两处脚本踩坑复盘）。
 
 ---
 
@@ -493,7 +506,7 @@ word 总行数: 22761 = 7508+5651+9602
 | G4 ✅ | 阶段 7 后 | 核心闭环端到端跑通 + 算法单测通过（已过，`76cf216`） |
 | G5 ✅ | 阶段 8 后 | **降级路径在 ai-service 未启动时全绿**（一等约束）（已过，`45eb7d8`） |
 | G6 ✅ | 阶段 10 前 | 契约文档已回写（先文档后代码，不可颠倒）（已过，`29e8e5f`） |
-| G7 | 阶段 11 后 | 全部验收标准勾选，交付物齐全 |
+| G7 ⏳ | 阶段 11 后 | 全部验收标准勾选，交付物齐全（**证据已齐**：一键 `smoke-test.sh` 143 用例 0 FAIL + `mvn -o test` 326 全绿 + 日志 ERROR=0 + 红线 20 表未变）——**待人工确认** |
 
 ## 验证命令速查
 

@@ -145,36 +145,36 @@
 
 ### 功能正确性
 
-- [ ] 7 张表迁移脚本在空库上执行成功，重复执行不报错；索引与唯一约束与 S3 §7 一致。
-- [ ] 三本词书导入后 `word_count` = 7508 / 5651 / 9602，可用 SQL 核对。
-- [ ] 30 个对外接口逐条自测通过，留存可执行脚本与输出。
-- [ ] 一条完整链路走通：注册 → 选词书 → 学 20 词（含「不认识」）→ 打卡 → 错题本有该词 → 复习页见到它 → 答错后 stage 退回 1 且 `next_review_date` = 明天 → 统计页有数据。
-- [ ] 打卡幂等：连续两次打卡，第二次返回 3001 且 `study_record` 无重复行、`streak_days` 不变。
-- [ ] 连续天数：构造「昨天打卡 + 今天打卡」→ streak+1；构造「中断两天后打卡」→ streak 重置为 1。
-- [ ] 间隔复习：连续答对 4 次 → stage 依次 2/3/4/4（封顶）；答错一次 → stage 立即为 1。
-- [ ] 错题去重：同词两次「不认识」→ 一条 `mistake_entry`，`wrong_count=2`。
+- [x] 7 张表迁移脚本在空库上执行成功，重复执行不报错；索引与唯一约束与 S3 §7 一致。（G2 复核：55/55 列、14/14 索引逐字核对；`verify-schema-entities.py`）
+- [x] 三本词书导入后 `word_count` = 7508 / 5651 / 9602，可用 SQL 核对。（G3 + 阶段 10 冒烟 B1 复核）
+- [x] 全部对外接口（33 个 = 契约 30 + 补齐管理端 3）逐条自测通过，留存可执行脚本与输出。（`backend/scripts/smoke-test.sh` 一键跑 143 用例；分脚本 g4-smoke/g4-crossday/g5-smoke/stage9-stats-smoke/stage10-admin-smoke）
+- [x] 一条完整链路走通：注册 → 选词书 → 学 20 词（含「不认识」）→ 打卡 → 错题本有该词 → 复习页见到它 → 答错后 stage 退回 1 且 `next_review_date` = 明天 → 统计页有数据。（`g4-smoke.py` + `stage9-stats-smoke.py`）
+- [x] 打卡幂等：连续两次打卡，第二次返回 3001 且 `study_record` 无重复行、`streak_days` 不变。（`g4-smoke.py`）
+- [x] 连续天数：构造「昨天打卡 + 今天打卡」→ streak+1；构造「中断两天后打卡」→ streak 重置为 1。（`g4-crossday.py`）
+- [x] 间隔复习：连续答对 4 次 → stage 依次 2/3/4/4（封顶）；答错一次 → stage 立即为 1。（`g4-crossday.py` + `ReviewScheduleTest`）
+- [x] 错题去重：同词两次「不认识」→ 一条 `mistake_entry`，`wrong_count=2`。（`g4-smoke.py` + `MistakeServiceImplTest`）
 
 ### 契约一致性
 
-- [ ] 逐字段对照 `docs/接口详细设计.md`，路径/字段名/类型/错误码零偏差。
-- [ ] **先改文档**：补齐的 3 个管理端接口已写入《接口详细设计》§8 并在 §10 变更记录登记。
-- [ ] `word_progress` 表的偏离已记入 design.md（并提示需同步 S3）。
-- [ ] 业务失败 HTTP 状态为 200；401/403/500 仅按契约语义使用。
+- [x] 逐字段对照 `docs/接口详细设计.md`，路径/字段名/类型/错误码零偏差。（契约已冻结 V1.1，阶段 10 严格照 §8 实现；管理端 46 用例逐字段核对）
+- [x] **先改文档**：补齐的 3 个管理端接口已写入《接口详细设计》§8 并在 §10 变更记录登记。（G6，提交 `29e8e5f`，先于阶段 10 编码）
+- [x] `word_progress` 表的偏离已记入 design.md，并已同步 S3（§7.1 表数 6→7 + 表清单，S3 V1.3）。
+- [x] 业务失败 HTTP 状态为 200；401/403/404/405/415 仅按契约语义使用（`GlobalExceptionHandlerIntegrationTest` + `JwtInterceptorIntegrationTest` 锁死）。
 
 ### 降级与安全
 
-- [ ] **ai-service 未启动**时：`/api/client/ai/example` 返回 `code:"0"` + `degraded:true` + 内置例句；`explain`/`report` 返回 5001/5002。
-- [ ] 学习/打卡/复习链路在 ai-service 宕机时完全不受影响。
-- [ ] 降级事件可通过 `GET /api/admin/monitor/ai-stats` 观测到计数增加。
-- [ ] 日志中 grep 不到密码、token、AI key。
-- [ ] 禁用用户后其 token 立即失效（401 + 1003 文案）；禁用 ADMIN 返回 1005。
-- [ ] `application.yml` 无明文密码，全部环境变量占位；本地配置被 `.gitignore` 排除。
+- [x] **ai-service 未启动**时：`/api/client/ai/example` 返回 `code:"0"` + `degraded:true` + 内置例句；`explain`/`report` 返回 5001/5002。（G5：`g5-smoke.py` 刻意不启动 ai-service；另用 `silent-ai-server.py` 压短超时验证真实超时→5001）
+- [x] 学习/打卡/复习链路在 ai-service 宕机时完全不受影响。（G5 D1/D2/D3 用例）
+- [x] 降级事件可通过 `GET /api/admin/monitor/ai-stats` 观测到计数增加。（阶段 10 冒烟 F4：真实降级后 `degradedCount` +1）
+- [x] 日志中 grep 不到密码、token、AI key。（G5 实测 grep 0 命中；另修生产默认 `com.vocab.mapper` DEBUG→INFO，杜绝 SQL 日志打印 BCrypt 哈希）
+- [x] 禁用用户后其 token 立即失效（401 + 1003 文案）；禁用 ADMIN 返回 1005。（阶段 10 集成测试 + 冒烟 E6/E8）
+- [x] `application.yml` 无明文密码，全部环境变量占位；本地配置被 `.gitignore` 排除。（`git ls-files application-local.yml` = 0 命中）
 
 ### 可交付性
 
-- [ ] `mvn -q clean package` 构建通过（含测试）。
-- [ ] 含 `README.md`：环境要求、建库步骤、脚本执行顺序、环境变量清单、启动命令、自测方法。
-- [ ] 有可运行的接口自测脚本（如 `scripts/smoke-test.sh` 或 HTTP 文件）。
+- [x] `mvn -o clean package` 构建通过（含测试）——**326 tests, 0 failures, 0 errors**。
+- [x] 含 `README.md`：环境要求、建库步骤、脚本执行顺序、环境变量清单、种子导入、启动命令、自测方法（已按最终交付状态重写）。
+- [x] 有可运行的接口自测脚本：`backend/scripts/smoke-test.sh`（一键）+ 5 个分脚本，根目录 `scripts/smoke-test.sh` 为转发入口。
 
 ---
 

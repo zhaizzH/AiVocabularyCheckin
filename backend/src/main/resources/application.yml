@@ -116,7 +116,9 @@ logging:
   level:
     root: INFO
     com.vocab: DEBUG
-    # MyBatis-Plus SQL 日志
-    com.vocab.mapper: DEBUG
+    # MyBatis-Plus SQL 日志：生产默认关闭。
+    # ⚠️ 开启后 MyBatis 会把 user 表的 password_hash（BCrypt 哈希）也打进日志。
+    # 本地联调需要看 SQL 时，在 application-local.yml 里单独设为 DEBUG。
+    com.vocab.mapper: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"

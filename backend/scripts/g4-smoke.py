@@ -17,7 +17,7 @@ import time
 import urllib.error
 import urllib.request
 
-BASE = "http://127.0.0.1:8080"
+BASE = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("BASE", "http://127.0.0.1:8080")
 
 PASS = []
 FAIL = []

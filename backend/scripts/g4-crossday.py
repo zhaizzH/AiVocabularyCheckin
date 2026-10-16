@@ -22,7 +22,13 @@ import urllib.request
 
 import pymysql
 
-BASE = "http://127.0.0.1:8080"
+BASE = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("BASE", "http://127.0.0.1:8080")
+
+# 数据库连接参数与 smoke-test.sh 传参一致（默认值 = 本机开发环境）
+DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
+DB_PORT = int(os.environ.get("DB_PORT", "3306"))
+DB_USER = os.environ.get("DB_USERNAME", "root")
+DB_NAME = os.environ.get("DB_NAME", "ai_vocab")
 DBPASS = os.environ["DBPASS"]
 
 PASS, FAIL = [], []
@@ -55,8 +61,8 @@ def call(method, path, token=None, body=None):
 
 
 def main():
-    conn = pymysql.connect(host="127.0.0.1", port=3306, user="root", password=DBPASS,
-                           database="ai_vocab", charset="utf8mb4", autocommit=True)
+    conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DBPASS,
+                           database=DB_NAME, charset="utf8mb4", autocommit=True)
     cur = conn.cursor()
 
     username = "g4cd_%d" % int(time.time() * 1000 % 100000000)
