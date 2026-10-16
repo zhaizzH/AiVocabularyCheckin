@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 1
+- **Total Sessions**: 2
 - **Last Active**: 2026-10-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~67 | Active |
+| `journal-1.md` | ~189 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 2 | 2026-10-16 | backend 阶段 5：认证模块（5 个 auth 接口 + 禁用即时生效） | `8ca2e17` | `main` |
 | 1 | 2026-10-16 | backend 阶段 2：工程骨架（Spring Boot 3.5 + MyBatis-Plus） | `140e601` | `main` |
 <!-- @@@/auto:session-history -->
 

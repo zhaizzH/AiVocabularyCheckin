@@ -136,3 +136,54 @@
   使「管理员禁用 → 该用户 JWT 立即失效 1003」生效）+ 真实 AppID/AppSecret 走 code2Session
 - 阶段 6 词库与种子导入 → 闸口 G3（三本词书计数 7508/5651/9602 严格一致）
 - 阶段 7 学习/复习/错题 → 闸口 G4；阶段 8 AI 降级 → G5；阶段 10 前回写契约 → G6；阶段 11 收尾 → G7
+
+
+## Session 2: backend 阶段 5：认证模块（5 个 auth 接口 + 禁用即时生效）
+<!-- trellis-session: v=2 fp=1fc470090199925e -->
+
+**Date**: 2026-10-16
+**Task**: backend 阶段 5：认证模块（5 个 auth 接口 + 禁用即时生效）
+**Branch**: `main`
+
+### Summary
+
+实现《接口详细设计》§1 全部 5 个认证接口，并落地 §8.7「管理员禁用后 token 立即失效」。UserStatusValidator 升为三态枚举以区分 1003 与 1006。118 测试全绿（+62），真实 MySQL + 真实微信 API 冒烟 38/38。
+
+### Main Changes
+
+- dto/request/ 4 个 + dto/response/ 4 个 + service/AuthService(+Impl) + controller/AuthController（5 接口）
+- client/WxApiClient：真实 code2Session，专用 wxRestTemplate（5s 读超时）；未配置/S网络错/errcode!=0/缺 openid/非 JSON 统一 → 1004，绝不冒泡 9001
+- UserStatusValidator 由单方法 isActive(Long) 升为三态枚举 ACTIVE/DISABLED/UNKNOWN；新增 UserStatusValidatorImpl 每请求主键查库（@TableLogic 自动附 deleted=0）
+- JwtInterceptor：DISABLED→401+1003、UNKNOWN→401+1006；管理端非 ADMIN→403+1007
+- 唯一性由 DB 唯一索引兜底（非仅先查后插）：并发注册→1001；并发微信建号→重查复用，重查仍无则原样上抛
+- 微信账号 username/password_hash 均置 NULL：MySQL 唯一索引允许多 NULL，数据层杜绝其走密码登录
+- design.md §5 补全：JWT_SECRET fail-fast（原文「必须有默认值兜底」与红线冲突，已修正）、三态校验、wx 客户端、唯一性并发；新增 §5.5/§5.6
+- implement.md：阶段 5 三项勾选 + 实施记录；闸口表 G1/G2 标记 ✅；新增 research/04-stage5-auth-review.md
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8ca2e17` | feat(backend): 阶段 5 认证模块 — 5 个 auth 接口 + 禁用即时生效 |
+
+### Testing
+
+- [OK] mvn -o clean test：118 全绿（阶段2 的 37 + 阶段4 的 19 + 本阶段 62），连跑 3 次稳定
+- [OK] 新增 WxApiClientTest(8，起真实本地 HTTP 桩服务，非 mock 方法)：覆盖 URL 拼接/errcode 分支/非 JSON/连接失败/缺凭证不发请求
+- [OK] 新增 AuthServiceImplTest(21)：真实库 + 并发分支桩注入（DuplicateKey→重查复用 / 重查无→上抛）
+- [OK] 新增 AuthControllerIntegrationTest(25)：MockMvc 真实 HTTP，5 接口外部形状 + §8.7 禁用即时失效
+- [OK] 改造阶段 2 两个测试类：原伪造 userId=999 签 token，现会被真实查库判为 UNKNOWN→401，改为先建真实用户
+- [OK] 真实 MySQL + 真实微信 API 闸口冒烟 /c/tmp/stage5-smoke.sh 38/38：无效 code 得 errcode=40029→1004（证明 appid/secret 被微信接受）
+- [OK] §8.7：直接 UPDATE user SET status=0 后同一 token 立即 401+1003；同账号重新登录也 1003
+- [OK] 响应体 UTF-8 逐字节校验：1002 文案字节 e794a8...e8afaf 与期望一致；createTime 输出 2026-10-16 18:11:07（空格分隔）
+- [OK] 红线：anime_tracker 仍 20 表、ai_vocab 7 表；user 表回到 0 行；无非 BCrypt 哈希；main 下无 System.out/硬编码凭证；application-local.yml 未被 git 跟踪
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 阶段 6 词库模块 + 种子导入（单一 parseLine 双入口、saveBatch 1000、导入后校正 word_count）→ 闸口 G3（7508/5651/9602 严格一致）
+- 阶段 7 学习/复习/错题核心闭环 → G4；阶段 8 AI 降级 → G5；阶段 9 统计（StatsMapper 已就位，补 Service/Controller）
+- 阶段 10 管理模块前必须 G6 回写契约：1006/1007/9002-9004 + JSR-310 格式注 + §8/§10 新接口 + S3 三条（表数 6→7、加固唯一索引、时间列 ORM 填充）
