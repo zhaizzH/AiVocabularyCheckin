@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 单词打卡 · 小程序端原型</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; font-family:"PingFang SC","Microsoft YaHei",sans-serif; }
+body { background:#f0f2f5; padding:24px; }
+h1 { font-size:18px; margin-bottom:4px; }
+.desc { color:#888; font-size:13px; margin-bottom:20px; }
+.nav { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:24px; }
+.nav button { padding:6px 14px; border:1px solid #d0d0d8; background:#fff; border-radius:16px; font-size:13px; cursor:pointer; }
+.nav button.active { background:#4a6cf7; color:#fff; border-color:#4a6cf7; }
+.stage { display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap; }
+.phone { width:340px; height:700px; background:#fff; border-radius:28px; border:8px solid #222; overflow:hidden; display:none; flex-direction:column; position:relative; }
+.phone.show { display:flex; }
+.statusbar { height:28px; display:flex; justify-content:space-between; align-items:center; padding:0 16px; font-size:11px; color:#333; background:#fff; }
+.page { flex:1; overflow-y:auto; padding:14px; background:#f7f8fa; }
+.tabbar { height:52px; display:flex; border-top:1px solid #eee; background:#fff; }
+.tabbar div { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:11px; color:#999; gap:2px; }
+.tabbar div.on { color:#4a6cf7; }
+.tabbar b { font-size:16px; }
+.notes { width:300px; background:#fff; border-radius:12px; padding:16px; font-size:13px; line-height:1.8; color:#444; }
+.notes h3 { font-size:14px; margin-bottom:8px; color:#222; }
+.notes li { margin-left:16px; }
+/* components */
+.card { background:#fff; border-radius:12px; padding:14px; margin-bottom:12px; }
+.btn { display:block; width:100%; padding:12px; border:none; border-radius:10px; background:#4a6cf7; color:#fff; font-size:15px; text-align:center; }
+.btn.ghost { background:#fff; color:#4a6cf7; border:1px solid #4a6cf7; }
+.btn.gray { background:#e8eaf0; color:#999; }
+.input { width:100%; padding:12px; border:1px solid #e0e0e6; border-radius:10px; margin-bottom:12px; font-size:14px; background:#fafafa; }
+.tag { display:inline-block; padding:2px 10px; border-radius:10px; font-size:11px; background:#eef1fe; color:#4a6cf7; }
+.wordcard { background:#fff; border-radius:16px; padding:36px 20px; text-align:center; margin-bottom:14px; }
+.wordcard .w { font-size:30px; font-weight:600; }
+.wordcard .p { color:#999; font-size:13px; margin-top:6px; }
+.wordcard .t { color:#333; font-size:14px; margin-top:14px; line-height:1.7; }
+.row { display:flex; gap:10px; }
+.row .btn { flex:1; }
+.hmap { display:grid; grid-template-columns:repeat(12,1fr); gap:4px; }
+.hmap i { aspect-ratio:1; border-radius:3px; background:#eee; }
+.stat-num { font-size:26px; font-weight:600; color:#4a6cf7; }
+.modal-mask { position:absolute; inset:0; background:rgba(0,0,0,.4); display:flex; align-items:flex-end; }
+.modal { background:#fff; width:100%; border-radius:16px 16px 0 0; padding:20px; max-height:70%; overflow-y:auto; }
+.avatar { width:44px; height:44px; border-radius:50%; background:#dfe5fb; display:inline-flex; align-items:center; justify-content:center; font-size:18px; color:#4a6cf7; }
+.listitem { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid #f0f0f2; font-size:14px; }
+</style>
+</head>
+<body>
+<h1>AI 单词学习打卡小程序 · 学生端原型</h1>
+<p class="desc">点击按钮切换页面 · 对应 S3 第 6.2 节界面设计 · 仅供开发参照，非视觉稿</p>
+<div class="nav" id="nav"></div>
+<div class="stage">
+  <div id="phones"></div>
+  <div class="notes" id="notes"></div>
+</div>
+<script>
+const TABS = `<div class="tabbar">
+  <div data-p="home"><b>⌂</b>首页</div><div data-p="study"><b>✎</b>学习</div>
+  <div data-p="review"><b>↻</b>复习</div><div data-p="mistakes"><b>✗</b>错题</div>
+  <div data-p="stats"><b>▦</b>统计</div><div data-p="me"><b>☺</b>我的</div></div>`;
+const BAR = `<div class="statusbar"><span>9:41</span><span>AI单词打卡</span><span>···</span></div>`;
+
+const pages = {
+login: { title:"登录 / 注册", html:`
+  ${BAR}<div class="page" style="display:flex;flex-direction:column;justify-content:center">
+  <div style="text-align:center;margin-bottom:28px"><div style="font-size:22px;font-weight:600">AI 单词打卡</div>
+  <div style="color:#999;font-size:12px;margin-top:6px">学 — 练 — 复盘</div></div>
+  <button class="btn" style="background:#07c160">微信一键登录</button>
+  <div style="text-align:center;font-size:11px;color:#c0c0c6;margin-top:8px">新用户将自动创建账号并引导设置昵称</div>
+  <div style="display:flex;align-items:center;margin:22px 0;color:#c0c0c6;font-size:12px">
+    <div style="flex:1;height:1px;background:#eee"></div><span style="padding:0 10px">账号密码登录（备用）</span><div style="flex:1;height:1px;background:#eee"></div></div>
+  <input class="input" placeholder="用户名（4-20位）"><input class="input" type="password" placeholder="密码（≥6位，含字母+数字）">
+  <button class="btn ghost">登 录</button>
+  <div style="text-align:center;margin-top:14px;font-size:13px;color:#4a6cf7">没有账号？去注册</div>
+  <div style="text-align:center;margin-top:16px;font-size:12px;color:#c0c0c6">1004 微信登录失败 → toast 提示可用账号密码</div></div>`,
+  notes:["微信一键登录为主入口（绿色按钮），账号密码折叠为备用","新用户 isNewUser=true → 跳设置昵称引导页","错误码：1001 占用 / 1002 密码错误 / 1003 禁用 / 1004 微信登录失败"]},
+
+setup: { title:"新用户引导（设置昵称）", html:`
+  ${BAR}<div class="page" style="display:flex;flex-direction:column;justify-content:center">
+  <div style="text-align:center;margin-bottom:24px"><div style="font-size:18px;font-weight:600">你好，新同学 👋</div>
+  <div style="color:#999;font-size:12px;margin-top:6px">设置一个昵称，开始你的打卡之旅</div></div>
+  <input class="input" placeholder="昵称（≤20字）" value="微信用户8f3k">
+  <div style="font-size:13px;color:#666;margin-bottom:10px">选个头像</div>
+  <div style="display:flex;gap:10px;justify-content:space-between;margin-bottom:24px">
+    <span class="avatar" style="border:2px solid #4a6cf7">1</span><span class="avatar">2</span><span class="avatar">3</span>
+    <span class="avatar">4</span><span class="avatar">5</span><span class="avatar">6</span></div>
+  <button class="btn">完成，开始学习</button></div>`,
+  notes:["仅微信首次登录（isNewUser）进入","昵称预填默认「微信用户+随机后缀」可改","头像 6 选 1，提交 PUT /api/client/auth/profile"]},
+
+books: { title:"词库选择页", html:`
+  ${BAR}<div class="page">
+  <div class="card" style="padding:6px 10px;display:flex;gap:6px">
+    <span class="tag">全部</span><span class="tag" style="background:#f5f5f5;color:#666">四级</span>
+    <span class="tag" style="background:#f5f5f5;color:#666">六级</span><span class="tag" style="background:#f5f5f5;color:#666">考研</span></div>
+  <div class="card"><div style="display:flex;justify-content:space-between;align-items:center">
+    <b>四级核心词汇</b><span class="tag">已加入 ✓</span></div>
+    <div style="font-size:12px;color:#999;margin:6px 0">7,508 词 · 覆盖 CET4 高频词</div>
+    <div style="font-size:12px;color:#4a6cf7">已学 346 词</div></div>
+  <div class="card"><div style="display:flex;justify-content:space-between;align-items:center">
+    <b>六级核心词汇</b><span class="tag" style="background:#f6ffed;color:#52c41a">+ 加入</span></div>
+    <div style="font-size:12px;color:#999;margin-top:6px">5,651 词 · CET6 必备</div></div>
+  <div class="card"><div style="display:flex;justify-content:space-between;align-items:center">
+    <b>考研核心词汇</b><span class="tag" style="background:#f6ffed;color:#52c41a">+ 加入</span></div>
+    <div style="font-size:12px;color:#999;margin-top:6px">9,602 词 · 考研英语大纲词</div></div>
+  <div style="font-size:11px;color:#c0c0c6;text-align:center">已加入的词书再点可「移出」（modal 二次确认，历史记录保留）</div></div>${TABS}`,
+  notes:["对应 F3，分类 Tab 筛选 CET4/CET6/KAOYAN","加入 → POST select；移出 → DELETE select + 二次确认","卡片显示单词数与已学进度"]},
+
+home: { title:"首页", html:`
+  ${BAR}<div class="page">
+  <div class="card" style="background:#4a6cf7;color:#fff">
+    <div style="font-size:13px;opacity:.85">今日学习计划</div>
+    <div style="font-size:24px;font-weight:600;margin:8px 0">14 / 20 词</div>
+    <div style="height:6px;background:rgba(255,255,255,.3);border-radius:3px"><div style="width:70%;height:100%;background:#fff;border-radius:3px"></div></div>
+    <button class="btn" style="background:#fff;color:#4a6cf7;margin-top:14px">继续学习</button></div>
+  <div class="card" style="display:flex;justify-content:space-around;text-align:center">
+    <div><div class="stat-num">12</div><div style="font-size:12px;color:#999">连续打卡(天)</div></div>
+    <div><div class="stat-num">346</div><div style="font-size:12px;color:#999">已学单词</div></div>
+    <div><div class="stat-num">8</div><div style="font-size:12px;color:#999">待复习</div></div></div>
+  <div class="card"><div style="font-size:14px;font-weight:500;margin-bottom:10px">我的词书</div>
+    <div class="listitem"><span>四级核心词汇 <span class="tag">已加入</span></span><span style="color:#999;font-size:12px">346/7508</span></div>
+    <div class="listitem" style="border:none"><span>考研核心词汇</span><span style="color:#4a6cf7;font-size:12px">+ 加入</span></div></div>
+  </div>${TABS}`,
+  notes:["时效数据在 onShow 刷新：今日进度、连续天数、待复习数","未选词书时空状态：「先去选一本词书」+ 按钮","今日已学完：进度卡变「今日已完成 ✓」"]},
+
+study: { title:"学习页（单词卡片）", html:`
+  ${BAR}<div class="page">
+  <div style="font-size:12px;color:#999;margin-bottom:8px">四级核心词汇 · 15/20</div>
+  <div class="wordcard"><div class="w">abandon</div><div class="p">/əˈbændən/</div>
+    <div class="t">v. 放弃；抛弃；离弃<br>n. 放任，放纵</div>
+    <div style="margin-top:14px"><span class="tag" data-p="aiExample">✦ AI 例句</span></div></div>
+  <div class="row"><button class="btn ghost">✗ 不认识</button><button class="btn">✓ 认识</button></div>
+  <button class="btn gray" style="margin-top:12px">完成学习后打卡（当前 15/20）</button>
+  </div>${TABS}`,
+  notes:["点卡片翻面显示释义","「不认识」→ 立即收录错题本","学满计划词数后打卡按钮点亮","打卡幂等：重复点 → 3001 今日已打卡"]},
+
+aiExample: { title:"AI 例句弹层", html:`
+  ${BAR}<div class="page"><div class="wordcard"><div class="w">abandon</div><div class="p">/əˈbændən/</div></div></div>
+  <div class="modal-mask"><div class="modal">
+    <div style="font-size:15px;font-weight:500;margin-bottom:10px">✦ AI 例句 · abandon</div>
+    <div style="font-size:14px;line-height:1.8">He decided to abandon the plan.<br><span style="color:#888">他决定放弃这个计划。</span></div>
+    <div style="background:#f7f8fa;border-radius:8px;padding:10px;margin-top:12px;font-size:13px;color:#555">助记：a（一个）+ bandon（板凳）→ 连板凳都不要了 → 放弃</div>
+    <button class="btn ghost" style="margin-top:14px">关闭</button>
+    <div style="font-size:11px;color:#c0c0c6;margin-top:10px">加载态：骨架屏「AI 正在生成…」；超时15s → 降级展示内置例句 +「AI 暂时不可用」</div>
+  </div></div>${TABS}`,
+  notes:["经 /api/ai/example 中转，前端不直连 ai-service","降级内容 = word.example 内置例句","失败不阻塞学习流程"]},
+
+review: { title:"复习页", html:`
+  ${BAR}<div class="page">
+  <div class="card" style="display:flex;justify-content:space-between;align-items:center">
+    <div><div style="font-size:15px;font-weight:500">今日待复习</div><div style="font-size:12px;color:#999">按间隔复习算法生成（1/3/7/15天）</div></div>
+    <div class="stat-num">8</div></div>
+  <div class="wordcard"><div class="w">tremendous</div><div class="p">/trəˈmendəs/</div>
+    <div style="margin-top:16px;color:#999;font-size:13px">— 点击卡片回忆释义 —</div></div>
+  <div class="row"><button class="btn ghost">✗ 答错（退回1天后）</button><button class="btn">✓ 答对（下一阶段）</button></div>
+  </div>${TABS}`,
+  notes:["答对进入下一间隔阶段，答错退回第1阶段且 wrong_count+1","列表实时计算，不建存储表","复习完显示「今日复习完成」"]},
+
+mistakes: { title:"错题本", html:`
+  ${BAR}<div class="page">
+  <div class="card" style="padding:8px 14px"><span class="tag">未掌握 12</span> <span style="font-size:12px;color:#999;margin-left:8px">已掌握 5</span></div>
+  <div class="card"><div style="display:flex;justify-content:space-between"><b>abandon</b><span style="font-size:12px;color:#d4380d">错 3 次 · 学习</span></div>
+    <div style="font-size:13px;color:#666;margin-top:6px">v. 放弃；抛弃</div>
+    <div style="margin-top:8px;font-size:12px"><span class="tag">✦ AI 讲解</span> <span class="tag" style="background:#f6ffed;color:#52c41a">标记已掌握</span> <span class="tag" style="background:#fff1f0;color:#d4380d">移除</span></div></div>
+  <div class="card"><div style="display:flex;justify-content:space-between"><b>tremendous</b><span style="font-size:12px;color:#d4380d">错 1 次 · 复习</span></div>
+    <div style="font-size:13px;color:#666;margin-top:6px">adj. 巨大的；极好的</div>
+    <div style="margin-top:8px;font-size:12px"><span class="tag">✦ AI 讲解</span> <span class="tag" style="background:#f6ffed;color:#52c41a">标记已掌握</span> <span class="tag" style="background:#fff1f0;color:#d4380d">移除</span></div></div>
+  </div>${TABS}`,
+  notes:["列表分页加载，按未掌握/已掌握筛选","AI 讲解超时30s，失败不影响标记已掌握","移除需二次确认（逻辑删除）"]},
+
+stats: { title:"统计页", html:`
+  ${BAR}<div class="page">
+  <div class="card"><div style="font-size:14px;font-weight:500;margin-bottom:10px">打卡热力图（近12周）</div>
+    <div class="hmap" id="hm"></div>
+    <div style="font-size:11px;color:#999;margin-top:8px">颜色深浅 = 当日学习词数：0 / 1-10 / 11-20 / 21+</div></div>
+  <div class="card"><div style="font-size:14px;font-weight:500;margin-bottom:10px">掌握度曲线（近30天）</div>
+    <svg viewBox="0 0 300 100" width="100%"><polyline points="0,80 30,72 60,74 90,60 120,55 150,48 180,50 210,38 240,30 270,28 300,20" fill="none" stroke="#4a6cf7" stroke-width="2"/>
+    <polyline points="0,90 60,85 120,80 180,75 240,70 300,62" fill="none" stroke="#d4380d" stroke-width="1.5" stroke-dasharray="4"/></svg>
+    <div style="font-size:11px;color:#999">实线=掌握度% 虚线=每日错题数</div></div>
+  </div>${TABS}`,
+  notes:["热力图 SQL 按 check_in_date 聚合","掌握度 = 已掌握错题/总错题","无数据时显示引导文案"]},
+
+report: { title:"AI 学习报告", html:`
+  ${BAR}<div class="page">
+  <div class="card" style="background:#4a6cf7;color:#fff"><div style="font-size:13px;opacity:.85">✦ AI 学习报告</div>
+    <div style="font-size:12px;opacity:.7;margin-top:4px">生成于 2026-10-16 15:30 · 基于近 12 天数据</div></div>
+  <div class="card"><b style="font-size:14px">📈 学习概况</b>
+    <div style="font-size:13px;color:#555;margin-top:8px;line-height:1.8">近两周你共学习 346 词，打卡率 85%，连续打卡 12 天，学习节奏稳定，超过了 78% 的用户。</div></div>
+  <div class="card"><b style="font-size:14px">⚠️ 薄弱环节</b>
+    <div style="font-size:13px;color:#555;margin-top:8px;line-height:1.8">错题集中在动词辨析（abandon / abort / abolish），共 12 个未掌握单词中 5 个来自复习环节，说明二次记忆仍需加强。</div></div>
+  <div class="card"><b style="font-size:14px">💡 学习建议</b>
+    <div style="font-size:13px;color:#555;margin-top:8px;line-height:1.8">建议将每日新词从 20 降至 15，把省下的时间用于错题复习；对动词辨析类错题，优先使用 AI 讲解功能。</div></div>
+  <button class="btn ghost">重新生成</button>
+  <div style="font-size:11px;color:#c0c0c6;text-align:center;margin-top:10px">报告实时生成不缓存 · 生成约需 60s 内 · 失败可重试</div></div>${TABS}`,
+  notes:["对应 F8，入口在「我的」页","分段结构：概况/薄弱环节/建议","学习<3天走数据不足态（见状态变体页）"]},
+
+avatar: { title:"更换头像弹层", html:`
+  ${BAR}<div class="page"><div class="card" style="display:flex;align-items:center;gap:12px">
+  <span class="avatar">吴</span><b>昵称可修改</b></div></div>
+  <div class="modal-mask"><div class="modal">
+    <div style="font-size:15px;font-weight:500;margin-bottom:14px">选择头像（6 选 1）</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;justify-items:center">
+      <span class="avatar" style="border:2px solid #4a6cf7;width:60px;height:60px">1</span><span class="avatar" style="width:60px;height:60px">2</span><span class="avatar" style="width:60px;height:60px">3</span>
+      <span class="avatar" style="width:60px;height:60px">4</span><span class="avatar" style="width:60px;height:60px">5</span><span class="avatar" style="width:60px;height:60px">6</span></div>
+    <button class="btn" style="margin-top:18px">确定</button>
+    <button class="btn ghost" style="margin-top:10px">取消</button></div></div>${TABS}`,
+  notes:["一期仅内置 6 选 1，不做上传","值域 avatar_1~avatar_6，接口校验 1005"]},
+
+about: { title:"关于页", html:`
+  ${BAR}<div class="page">
+  <div class="card" style="text-align:center;padding:30px">
+    <div style="font-size:18px;font-weight:600">AI 单词打卡</div>
+    <div style="font-size:12px;color:#999;margin-top:6px">版本 V1.0 · REL-10-2026</div></div>
+  <div class="card" style="font-size:12px;color:#666;line-height:1.9">
+    <b>开源词库声明</b><br>词库数据来源：KyleBing/english-vocabulary（GitHub），
+    遵循 BSD 3-Clause License，版权归原作者所有。<br><br>
+    <b>开发团队</b><br>软件工程课设 第 N 组</div></div>${TABS}`,
+  notes:["BSD 3-Clause 要求保留版权声明，此页即落点","组号/版本号提交前填实"]},
+
+me: { title:"我的", html:`
+  ${BAR}<div class="page">
+  <div class="card" style="display:flex;align-items:center;gap:12px">
+    <span class="avatar">吴</span><div><div style="font-size:16px;font-weight:500">昵称可修改</div>
+    <div style="font-size:12px;color:#999">@username · 注册于 2026-10 · 累计打卡 12 天</div></div></div>
+  <div class="card">
+    <div class="listitem"><span>我的词书管理</span><span style="color:#ccc">›</span></div>
+    <div class="listitem"><span>更换头像（6个内置可选）</span><span style="color:#ccc">›</span></div>
+    <div class="listitem"><span>✦ AI 学习报告</span><span style="color:#ccc">›</span></div>
+    <div class="listitem" style="border:none"><span>关于（词库版权说明）</span><span style="color:#ccc">›</span></div></div>
+  <button class="btn ghost" style="color:#d4380d;border-color:#d4380d">退出登录</button>
+  </div>${TABS}`,
+  notes:["AI 学习报告入口放这里，学习<3天提示数据不足","关于页须保留词库 BSD 版权声明","头像一期只做内置选择，不做上传"]},
+};
+
+const phones = document.getElementById('phones'), nav = document.getElementById('nav'), notes = document.getElementById('notes');
+Object.entries(pages).forEach(([k,v],i)=>{
+  const d=document.createElement('div'); d.className='phone'+(i===0?' show':''); d.id='p-'+k;
+  d.innerHTML=v.html; phones.appendChild(d);
+  const b=document.createElement('button'); b.textContent=v.title; if(i===0)b.className='active';
+  b.onclick=()=>{ document.querySelectorAll('.phone').forEach(p=>p.classList.remove('show'));
+    document.getElementById('p-'+k).classList.add('show');
+    document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active')); b.classList.add('active');
+    notes.innerHTML='<h3>'+v.title+' · 设计要点</h3><ul>'+v.notes.map(n=>'<li>'+n+'</li>').join('')+'</ul>'; };
+  nav.appendChild(b);
+});
+notes.innerHTML='<h3>'+pages.login.title+' · 设计要点</h3><ul>'+pages.login.notes.map(n=>'<li>'+n+'</li>').join('')+'</ul>';
+// tabbar 点击切页
+phones.addEventListener('click',e=>{ const t=e.target.closest('[data-p]'); if(t&&pages[t.dataset.p]){ [...nav.children].find(b=>b.textContent===pages[t.dataset.p].title)?.click(); }});
+// 热力图随机色块
+const hm=document.getElementById('hm'); const colors=['#eee','#c6d4fd','#8ba3f8','#4a6cf7'];
+for(let i=0;i<84;i++){const s=document.createElement('i'); s.style.background=colors[Math.floor(Math.random()*4)]; hm.appendChild(s);}
+</script>
+</body>
+</html>

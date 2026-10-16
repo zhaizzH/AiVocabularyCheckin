@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 单词打卡 · 管理端原型</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; font-family:"PingFang SC","Microsoft YaHei",sans-serif; }
+body { background:#f0f2f5; }
+h1 { font-size:18px; padding:20px 24px 4px; }
+.desc { color:#888; font-size:13px; padding:0 24px 16px; }
+.nav { display:flex; gap:8px; padding:0 24px 20px; }
+.nav button { padding:6px 14px; border:1px solid #d0d0d8; background:#fff; border-radius:6px; font-size:13px; cursor:pointer; }
+.nav button.active { background:#4a6cf7; color:#fff; border-color:#4a6cf7; }
+.screen { display:none; margin:0 24px 24px; background:#fff; border-radius:10px; min-height:560px; overflow:hidden; }
+.screen.show { display:block; }
+/* layout */
+.layout { display:flex; min-height:560px; }
+.sider { width:200px; background:#001529; color:#fff; padding:16px 0; }
+.sider .logo { padding:0 20px 16px; font-size:15px; font-weight:600; border-bottom:1px solid rgba(255,255,255,.1); }
+.sider .mi { padding:12px 20px; font-size:13px; color:rgba(255,255,255,.65); cursor:pointer; }
+.sider .mi.on { background:#4a6cf7; color:#fff; }
+.main { flex:1; padding:20px; }
+.topbar { display:flex; justify-content:space-between; align-items:center; padding-bottom:16px; border-bottom:1px solid #f0f0f0; margin-bottom:16px; font-size:14px; }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th { text-align:left; background:#fafafa; padding:10px 12px; color:#666; font-weight:500; border-bottom:1px solid #f0f0f0; }
+td { padding:10px 12px; border-bottom:1px solid #f0f0f0; }
+.btn { padding:5px 12px; border:1px solid #4a6cf7; color:#4a6cf7; background:#fff; border-radius:6px; font-size:12px; cursor:pointer; }
+.btn.primary { background:#4a6cf7; color:#fff; }
+.btn.danger { border-color:#d4380d; color:#d4380d; }
+.tag { padding:2px 8px; border-radius:4px; font-size:11px; }
+.tag.g { background:#f6ffed; color:#52c41a; } .tag.r { background:#fff1f0; color:#d4380d; } .tag.b { background:#eef1fe; color:#4a6cf7; }
+.stat-cards { display:flex; gap:16px; margin-bottom:20px; }
+.stat { flex:1; border:1px solid #f0f0f0; border-radius:8px; padding:16px; }
+.stat .n { font-size:26px; font-weight:600; color:#4a6cf7; margin-top:6px; }
+.stat .label { font-size:13px; color:#888; }
+.search { padding:6px 10px; border:1px solid #d9d9d9; border-radius:6px; font-size:13px; width:200px; }
+.toolbar { display:flex; justify-content:space-between; margin-bottom:14px; align-items:center; }
+.modal-mask { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; }
+.modal-mask.show { display:flex; }
+.modal { background:#fff; border-radius:10px; width:560px; max-height:70vh; overflow-y:auto; padding:24px; }
+.note { font-size:12px; color:#999; margin-top:14px; line-height:1.7; }
+.login-wrap { display:flex; align-items:center; justify-content:center; min-height:560px; }
+.login-box { width:360px; padding:36px; border:1px solid #f0f0f0; border-radius:12px; }
+.input { width:100%; padding:10px 12px; border:1px solid #d9d9d9; border-radius:6px; margin-bottom:14px; font-size:14px; }
+</style>
+</head>
+<body>
+<h1>AI 单词学习打卡 · 网页管理端原型（React 18 + Ant Design 5）</h1>
+<p class="desc">对应 S3 第 6.3 节 · 词库管理 / 用户管理 / 监控 三页 · 仅供开发参照，非视觉稿</p>
+<div class="nav" id="nav"></div>
+
+<div class="screen show" id="s-login">
+  <div class="login-wrap"><div class="login-box">
+    <div style="font-size:18px;font-weight:600;text-align:center;margin-bottom:6px">管理后台</div>
+    <div style="font-size:12px;color:#999;text-align:center;margin-bottom:24px">AI 单词学习打卡系统</div>
+    <input class="input" placeholder="管理员账号"><input class="input" type="password" placeholder="密码">
+    <button class="btn primary" style="width:100%;padding:9px;font-size:14px">登 录</button>
+    <div class="note">/api/admin/** 校验 ADMIN 角色；非管理员访问返回 403</div>
+  </div></div>
+</div>
+
+<div class="screen" id="s-books"><div class="layout">
+  <div class="sider"><div class="logo">AI单词打卡 · 后台</div>
+    <div class="mi on">词库管理</div><div class="mi" data-go="s-users">用户管理</div><div class="mi" data-go="s-monitor">系统监控</div></div>
+  <div class="main"><div class="topbar"><b>词库管理</b><span>admin · 退出</span></div>
+    <div class="toolbar"><span style="font-size:13px;color:#888">共 3 本词书</span><button class="btn primary" id="openImport">+ 导入词库（JSONL）</button></div>
+    <table><tr><th>词书名</th><th>分类</th><th>单词数</th><th>创建时间</th><th>操作</th></tr>
+      <tr><td>四级核心词汇</td><td><span class="tag b">四级</span></td><td>7,508</td><td>2026-10-20</td><td><button class="btn" onclick="document.getElementById('wordModal').classList.add('show')">单词管理</button> <button class="btn danger">删除</button></td></tr>
+      <tr><td>六级核心词汇</td><td><span class="tag b">六级</span></td><td>5,651</td><td>2026-10-20</td><td><button class="btn">单词管理</button> <button class="btn danger">删除</button></td></tr>
+      <tr><td>考研核心词汇</td><td><span class="tag b">考研</span></td><td>9,602</td><td>2026-10-20</td><td><button class="btn">单词管理</button> <button class="btn danger">删除</button></td></tr></table>
+    <div class="note">单词管理 = 弹窗内单词分页表格 + 新增/编辑/删除（删除二次确认）。删除词书二次确认，逻辑删除。</div>
+  </div></div>
+</div>
+
+<div class="screen" id="s-users"><div class="layout">
+  <div class="sider"><div class="logo">AI单词打卡 · 后台</div>
+    <div class="mi" data-go="s-books">词库管理</div><div class="mi on">用户管理</div><div class="mi" data-go="s-monitor">系统监控</div></div>
+  <div class="main"><div class="topbar"><b>用户管理</b><span>admin · 退出</span></div>
+    <div class="toolbar"><input class="search" placeholder="搜索用户名"><span style="font-size:13px;color:#888">分页：每页 20 条</span></div>
+    <table><tr><th>ID</th><th>用户名</th><th>昵称</th><th>注册时间</th><th>累计打卡</th><th>状态</th><th>操作</th></tr>
+      <tr><td>1001</td><td>zhangsan</td><td>张三</td><td>2026-10-18</td><td>12 天</td><td><span class="tag g">正常</span></td><td><button class="btn danger">禁用</button></td></tr>
+      <tr><td>1002</td><td>lisi</td><td>李四</td><td>2026-10-19</td><td>5 天</td><td><span class="tag g">正常</span></td><td><button class="btn danger">禁用</button></td></tr>
+      <tr><td>1003</td><td>wangwu</td><td>王五</td><td>2026-10-21</td><td>0 天</td><td><span class="tag r">已禁用</span></td><td><button class="btn">启用</button></td></tr></table>
+    <div class="note">禁用即时生效：该用户 JWT 下次校验即失败。操作记 INFO 日志（操作者 id、动作、目标用户）。</div>
+  </div></div>
+</div>
+
+<div class="screen" id="s-monitor"><div class="layout">
+  <div class="sider"><div class="logo">AI单词打卡 · 后台</div>
+    <div class="mi" data-go="s-books">词库管理</div><div class="mi" data-go="s-users">用户管理</div><div class="mi on">系统监控</div></div>
+  <div class="main"><div class="topbar"><b>系统监控</b><span>admin · 退出</span></div>
+    <div class="stat-cards">
+      <div class="stat"><div class="label">今日 AI 调用</div><div class="n">342</div></div>
+      <div class="stat"><div class="label">成功率</div><div class="n">96.2%</div></div>
+      <div class="stat"><div class="label">降级次数</div><div class="n" style="color:#d4380d">13</div></div>
+      <div class="stat"><div class="label">注册用户数</div><div class="n" style="color:#52c41a">58</div></div></div>
+    <b style="font-size:14px">降级事件</b>
+    <table style="margin-top:10px"><tr><th>时间</th><th>功能</th><th>耗时</th><th>降级结果</th></tr>
+      <tr><td>14:32:05</td><td>AI 错题讲解</td><td>30.1s（超时）</td><td>返回「AI 暂时不可用」</td></tr>
+      <tr><td>14:15:44</td><td>AI 例句生成</td><td>15.0s（超时）</td><td>返回内置例句</td></tr>
+      <tr><td>11:02:18</td><td>AI 学习报告</td><td>—（HTTP 500）</td><td>提示稍后重试</td></tr></table>
+    <div class="note">一期可用内存计数器 + 日志聚合实现，不做完整监控平台。</div>
+  </div></div>
+</div>
+
+<div class="modal-mask" id="wordModal"><div class="modal" style="width:720px">
+  <b style="font-size:15px">单词管理 · 四级核心词汇</b>
+  <div class="toolbar" style="margin:14px 0">
+    <input class="search" placeholder="搜索单词（keyword）">
+    <button class="btn primary" onclick="document.getElementById('wordForm').style.display='block'">+ 新增单词</button></div>
+  <div id="wordForm" style="display:none;border:1px solid #f0f0f0;border-radius:8px;padding:14px;margin-bottom:14px">
+    <b style="font-size:13px">新增 / 编辑单词</b>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+      <input class="input" placeholder="word（必填）" style="margin:0"><input class="input" placeholder="phonetic 音标" style="margin:0">
+      <input class="input" placeholder="translation 释义（词性. 中文）" style="margin:0;grid-column:span 2">
+      <input class="input" placeholder="example 例句" style="margin:0;grid-column:span 2"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px">
+      <button class="btn" onclick="document.getElementById('wordForm').style.display='none'">取消</button>
+      <button class="btn primary">保存</button></div></div>
+  <table><tr><th>word</th><th>phonetic</th><th>translation</th><th>操作</th></tr>
+    <tr><td>abandon</td><td>əˈbændən</td><td>v. 放弃；抛弃</td><td><button class="btn">编辑</button> <button class="btn danger">删除</button></td></tr>
+    <tr><td>ability</td><td>əˈbɪləti</td><td>n. 能力，能耐</td><td><button class="btn">编辑</button> <button class="btn danger">删除</button></td></tr>
+    <tr><td>aboard</td><td>əˈbɔːd</td><td>adv. 在船上</td><td><button class="btn">编辑</button> <button class="btn danger">删除</button></td></tr></table>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+    <span style="font-size:12px;color:#999">分页：‹ 1 2 3 … 376 ›（GET /api/admin/words?bookId=&keyword=&page=）</span>
+    <button class="btn" onclick="document.getElementById('wordModal').classList.remove('show')">关闭</button></div>
+  <div class="note">删除单词二次确认，逻辑删除，词书 wordCount 同步 ±1。</div>
+</div></div>
+
+<div class="modal-mask" id="importModal"><div class="modal">
+  <b style="font-size:15px">导入词库（JSONL，一词一行）</b>
+  <div style="border:1px dashed #d9d9d9;border-radius:8px;padding:26px;text-align:center;color:#999;margin:16px 0;font-size:13px">点击或拖拽上传 .jsonl 文件<br>字段：word / uk(音标) / translations / sentences</div>
+  <b style="font-size:13px">预览（前 20 行中的前 3 行）</b>
+  <table style="margin-top:8px"><tr><th>word</th><th>phonetic</th><th>translation</th><th>example</th></tr>
+    <tr><td>abandon</td><td>əˈbændən</td><td>v. 放弃；抛弃</td><td>He decided to abandon…</td></tr>
+    <tr><td>ability</td><td>əˈbɪləti</td><td>n. 能力，能耐</td><td>The ability to learn…</td></tr>
+    <tr><td>aboard</td><td>əˈbɔːd</td><td>adv. 在船上；上车</td><td>Welcome aboard!…</td></tr></table>
+  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+    <button class="btn" id="closeImport">取消</button><button class="btn primary">确认导入（saveBatch）</button></div>
+  <div class="note">后端逐行校验：字段缺失/格式错误行跳过并计数 → 返回「成功 N 条，跳过 M 条」。映射规则见需求清单 6.1。</div>
+</div></div>
+
+<script>
+const titles={ 's-login':'登录页','s-books':'词库管理','s-users':'用户管理','s-monitor':'系统监控' };
+const nav=document.getElementById('nav');
+Object.entries(titles).forEach(([k,t],i)=>{ const b=document.createElement('button'); b.textContent=t; if(i===0)b.className='active';
+  b.onclick=()=>go(k,b); nav.appendChild(b); });
+function go(k,b){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('show'));
+  document.getElementById(k).classList.add('show');
+  document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));
+  if(b) b.classList.add('active'); else [...nav.children].find(x=>x.textContent===titles[k])?.classList.add('active'); }
+document.body.addEventListener('click',e=>{ const m=e.target.closest('[data-go]'); if(m) go(m.dataset.go); });
+document.getElementById('openImport').onclick=()=>document.getElementById('importModal').classList.add('show');
+document.getElementById('closeImport').onclick=()=>document.getElementById('importModal').classList.remove('show');
+</script>
+</body>
+</html>

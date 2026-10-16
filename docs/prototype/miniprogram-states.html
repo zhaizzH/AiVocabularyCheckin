@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学生端 · 状态变体原型</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; font-family:"PingFang SC","Microsoft YaHei",sans-serif; }
+body { background:#f0f2f5; padding:24px; }
+h1 { font-size:18px; margin-bottom:4px; }
+.desc { color:#888; font-size:13px; margin-bottom:20px; }
+.nav { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:24px; }
+.nav button { padding:6px 14px; border:1px solid #d0d0d8; background:#fff; border-radius:16px; font-size:13px; cursor:pointer; }
+.nav button.active { background:#4a6cf7; color:#fff; border-color:#4a6cf7; }
+.stage { display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap; }
+.phone { width:340px; min-height:640px; background:#fff; border-radius:28px; border:8px solid #222; overflow:hidden; display:none; flex-direction:column; }
+.phone.show { display:flex; }
+.statusbar { height:28px; display:flex; justify-content:space-between; align-items:center; padding:0 16px; font-size:11px; color:#333; }
+.page { flex:1; padding:14px; background:#f7f8fa; }
+.card { background:#fff; border-radius:12px; padding:14px; margin-bottom:12px; }
+.btn { display:block; width:100%; padding:12px; border:none; border-radius:10px; background:#4a6cf7; color:#fff; font-size:15px; text-align:center; }
+.btn.ghost { background:#fff; color:#4a6cf7; border:1px solid #4a6cf7; }
+.btn.gray { background:#e8eaf0; color:#999; }
+.tag { display:inline-block; padding:2px 10px; border-radius:10px; font-size:11px; background:#eef1fe; color:#4a6cf7; }
+.warnbar { background:#fff7e6; color:#ad6800; font-size:12px; padding:6px 10px; border-radius:8px; margin-bottom:10px; }
+.empty { text-align:center; padding:60px 20px; color:#999; }
+.empty .icon { font-size:44px; margin-bottom:12px; }
+.empty .t { font-size:15px; color:#666; margin-bottom:6px; }
+.empty .s { font-size:12px; margin-bottom:20px; }
+.skeleton { background:linear-gradient(90deg,#eee 25%,#f5f5f5 50%,#eee 75%); background-size:200% 100%; animation:sk 1.2s infinite; border-radius:6px; }
+@keyframes sk { to { background-position:-200% 0; } }
+.stat-num { font-size:34px; font-weight:600; color:#4a6cf7; }
+.notes { width:300px; background:#fff; border-radius:12px; padding:16px; font-size:13px; line-height:1.8; color:#444; }
+.notes h3 { font-size:14px; margin-bottom:8px; }
+.notes li { margin-left:16px; }
+.modal-mask { position:absolute; inset:0; background:rgba(0,0,0,.4); display:flex; align-items:flex-end; }
+.modal { background:#fff; width:100%; border-radius:16px 16px 0 0; padding:20px; }
+.wordcard { background:#fff; border-radius:16px; padding:30px 20px; text-align:center; margin-bottom:14px; }
+.toast { position:absolute; top:45%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,.75); color:#fff; padding:12px 20px; border-radius:10px; font-size:14px; }
+</style>
+</head>
+<body>
+<h1>学生端 · 状态变体原型</h1>
+<p class="desc">核心页面的空态 / 成功态 / 降级态 / 失败态 · 与《学生端-需求分析与原型设计》状态设计章节一一对应</p>
+<div class="nav" id="nav"></div>
+<div class="stage"><div id="phones" style="position:relative"></div><div class="notes" id="notes"></div></div>
+<script>
+const BAR=`<div class="statusbar"><span>9:41</span><span>AI单词打卡</span><span>···</span></div>`;
+const pages={
+homeEmpty:{t:"首页 · 未选词书空态",h:`${BAR}<div class="page">
+  <div class="card"><div class="empty"><div class="icon">📚</div><div class="t">还没有选择词书</div>
+  <div class="s">选一本词书，开始今天的学习吧</div><button class="btn">去选词书</button></div></div></div>`,
+  n:["对应 F2 空态 A","进度卡整体替换为引导","点按钮跳词库页"]},
+
+planDone:{t:"学习页 · 打卡成功",h:`${BAR}<div class="page">
+  <div class="card" style="text-align:center;padding:36px 20px">
+    <div style="font-size:44px">🔥</div><div class="stat-num">12 天</div>
+    <div style="color:#999;font-size:13px;margin:6px 0 18px">连续打卡 · 继续保持！</div>
+    <div style="display:flex;justify-content:space-around;font-size:13px;color:#666">
+      <span>今日学习 <b>20</b> 词</span><span>新增错题 <b>3</b></span></div></div>
+  <button class="btn ghost">查看今日错题</button>
+  <button class="btn gray" style="margin-top:10px">已打卡 ✓</button></div>`,
+  n:["对应 F4 打卡成功态","按钮变「已打卡」防重复","重复点击 → toast 3001 今日已打卡"]},
+
+aiLoading:{t:"AI 例句 · 加载态",h:`${BAR}<div class="page"><div class="wordcard"><b style="font-size:26px">abandon</b></div></div>
+  <div class="modal-mask"><div class="modal">
+    <div style="font-size:15px;font-weight:500;margin-bottom:12px">✦ AI 例句 · abandon</div>
+    <div style="font-size:12px;color:#4a6cf7;margin-bottom:10px">AI 正在生成…</div>
+    <div class="skeleton" style="height:16px;margin-bottom:8px"></div>
+    <div class="skeleton" style="height:16px;width:80%;margin-bottom:8px"></div>
+    <div class="skeleton" style="height:40px"></div></div></div>`,
+  n:["对应 F5 加载态","骨架屏 + 禁止重复点击","超时上限 15s"]},
+
+aiFallback:{t:"AI 例句 · 降级态",h:`${BAR}<div class="page"><div class="wordcard"><b style="font-size:26px">abandon</b></div></div>
+  <div class="modal-mask"><div class="modal">
+    <div class="warnbar">AI 暂时不可用，展示内置例句</div>
+    <div style="font-size:14px;line-height:1.8">They had to abandon the car.<br><span style="color:#888">他们不得不弃车。</span></div>
+    <button class="btn ghost" style="margin-top:14px">关闭</button></div></div>`,
+  n:["对应 F5 降级态","内容降级为 word.example","顶部黄条说明来源","不阻塞学习流程"]},
+
+reviewEmpty:{t:"复习页 · 空态",h:`${BAR}<div class="page">
+  <div class="card"><div class="empty"><div class="icon">🎉</div><div class="t">今日没有待复习内容</div>
+  <div class="s">去学几个新词，或者明天再来</div><button class="btn">去学习新词</button></div></div></div>`,
+  n:["对应 F6 空态","待复习列表为计算生成","无待复习时给学习入口"]},
+
+mistakeAi:{t:"错题本 · AI 讲解展开",h:`${BAR}<div class="page">
+  <div class="card"><b>abandon</b> <span style="font-size:12px;color:#d4380d">错 3 次 · 学习</span>
+    <div style="font-size:13px;color:#666;margin-top:4px">v. 放弃；抛弃</div>
+    <div style="background:#f7f8fa;border-radius:8px;padding:12px;margin-top:10px;font-size:13px;line-height:1.8">
+      <b>✦ AI 讲解</b><br>你误选为「举办」。abandon 强调「彻底放弃」，常搭配 plan/hope/car；
+      易混词 abort 多指「中止进程」。<br><span style="color:#4a6cf7">建议：用「放弃计划」这个搭配造一个自己的句子。</span></div>
+    <div style="margin-top:10px"><span class="tag" style="background:#f6ffed;color:#52c41a">标记已掌握</span></div></div></div>`,
+  n:["对应 F7 讲解展开态","超时 30s","讲解失败时此区域显示失败文案，标记按钮仍可用"]},
+
+reportFew:{t:"AI 报告 · 数据不足",h:`${BAR}<div class="page">
+  <div class="card"><div class="empty"><div class="icon">📊</div><div class="t">数据还太少</div>
+  <div class="s">学习满 3 天后，AI 才能生成有价值的报告<br>当前已学习 <b style="color:#4a6cf7">1</b> 天</div>
+  <button class="btn">继续学习</button></div></div></div>`,
+  n:["对应 F8 数据不足态","前端/后端均可拦截，不调 AI","展示当前进度激励继续"]},
+
+statsEmpty:{t:"统计页 · 无数据",h:`${BAR}<div class="page">
+  <div class="card"><div class="empty"><div class="icon">🌱</div><div class="t">还没有学习数据</div>
+  <div class="s">开始第一次学习后，这里会长出你的数据</div><button class="btn">去学习</button></div></div></div>`,
+  n:["对应 F9 空态","热力图和曲线整体替换"]},
+
+unauthorized:{t:"全局 · 401 登录过期",h:`${BAR}<div class="page">
+  <div class="card"><div class="empty"><div class="icon">🔒</div><div class="t">登录已过期</div>
+  <div class="s">正在跳转登录页…</div></div></div>
+  <div class="toast">登录已过期，请重新登录</div></div>`,
+  n:["request 封装统一处理","清 token + 跳登录页 + toast","任何页面都可能触发"]},
+};
+const phones=document.getElementById('phones'),nav=document.getElementById('nav'),notes=document.getElementById('notes');
+Object.entries(pages).forEach(([k,v],i)=>{
+  const d=document.createElement('div');d.className='phone'+(i===0?' show':'');d.id='p-'+k;d.innerHTML=v.h;phones.appendChild(d);
+  const b=document.createElement('button');b.textContent=v.t;if(i===0)b.className='active';
+  b.onclick=()=>{document.querySelectorAll('.phone').forEach(p=>p.classList.remove('show'));document.getElementById('p-'+k).classList.add('show');
+    document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');
+    notes.innerHTML='<h3>'+v.t+'</h3><ul>'+v.n.map(x=>'<li>'+x+'</li>').join('')+'</ul>';};
+  nav.appendChild(b);});
+notes.innerHTML='<h3>'+pages.homeEmpty.t+'</h3><ul>'+pages.homeEmpty.n.map(x=>'<li>'+x+'</li>').join('')+'</ul>';
+</script>
+</body>
+</html>
