@@ -464,3 +464,41 @@
 
 - 阶段 10 管理模块（契约 V1.1 §8 十个接口；前置已就位：JwtInterceptor 403+1007、WordBookService 三方法占位）
 - 阶段 11 收尾（README/smoke-test.sh/prd 逐条自查）
+
+
+## Session 8: backend 阶段 10-11：管理模块（G6）+ 收尾交付（G7）
+<!-- trellis-session: v=2 fp=549ff8d3203b9ec3 -->
+
+**Date**: 2026-10-16
+**Task**: backend 阶段 10-11：管理模块（G6）+ 收尾交付（G7）
+**Branch**: `main`
+
+### Summary
+
+Session summary was not supplied.
+
+### Main Changes
+
+- 阶段 10：契约 §8 十接口（4 个 Admin Controller + AdminService）
+- 阶段 11：一键冒烟脚本、README 重写、clean-smoke-data、供应商登记
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c376ce2` | feat(admin): 阶段10 管理模块——词库/用户/监控十接口（契约 §8） |
+| `624b978` | chore(release): 阶段11 收尾——一键自测/README/测试数据清理/供应商登记 |
+
+### Testing
+
+- [OK] mvn -o clean package → 326 tests 全绿
+- [OK] smoke-test.sh → 143 用例 0 FAIL + ERROR=0
+- [OK] 红线 anime_tracker 20 表未变；敏感信息 grep 0 命中
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- ai-service 子任务：key 到位后补 AI 成功路径验证
