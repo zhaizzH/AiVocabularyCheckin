@@ -931,3 +931,124 @@ Vite 不要求该目录存在。
 
 - S4 交付文档 docs/部署说明.md（唯一剩余工作）
 - 非阻塞：真机 wx-login 全链路、关于页「第 N 组」文案
+
+
+## Session 15: 全仓一次性文件与构建产物清理
+<!-- trellis-session: v=2 fp=13a8a427dcf7de98 -->
+
+**Date**: 2026-10-17
+**Task**: 全仓一次性文件与构建产物清理
+**Branch**: `main`
+
+### Summary
+
+414M→35M：删 node_modules/.venv/target/dist/.tmp/tsbuildinfo，保留 backend/scripts 闸口冒烟。逐项验证删后能重建（frontend build / mvn compile / pytest 60 passed / 4 套验证 189 项），顺带修 verify_admin_frontend.py 无依赖时静默失败
+
+### Main Changes
+
+## Session 15：全仓一次性文件与构建产物清理
+
+**类型**：repo hygiene，纯删除 + 文档，零源码改动（除一处验证脚本健壮性小补）。
+
+### 起因
+
+四端全部交付后，工作区堆了 414M。排查发现**无未跟踪垃圾**（`.gitignore` 一直在生效），
+全部是「已被忽略、正常存在」的可再生产物。
+
+### 决策：开了任务
+
+用户选择开 Trellis 任务而非直接清（`10-17-repo-cleanup`，P3，挂在
+`10-16-aivocab-fullstack` 下）。理由：清理范围有争议点（backend/scripts 到底删不删），
+需要留决策记录。
+
+### 三个待决问题的答案
+
+| 问题 | 用户选择 |
+|---|---|
+| 开任务？ | **开** |
+| 构建产物 | **全清**（node_modules/.venv/target/dist/.tmp/tsbuildinfo） |
+| backend/scripts 闸口冒烟 | **保留** |
+
+保留 backend/scripts 的判断依据：那 5 个脚本虽是为过闸口写的一次性的，但
+**被 `smoke-test.sh` 一键自测调用着**，共 143 用例；`verify-schema-entities.py` /
+`verify-h2-schema-parity.py` 是结构一致性护栏，专防「H2 绿、MySQL 红」的假绿。
+删掉的收益是「少 10 个文件」，代价是一键自测少 5 条腿 —— 不划算。
+
+### 删了什么
+
+414M → 35M，释放 379M：
+
+| 路径 | 大小 | 再生方式 |
+|---|---|---|
+| `frontend/node_modules/` | 216M | `npm install` |
+| `ai-service/.venv/` | 129M | `python -m venv .venv && pip install -r` |
+| `backend/target/` | 32M | `mvn -o package` |
+| `.tmp/` | 1.8M | **不可再生**（见下） |
+| `frontend/dist/` | 1.2M | `npm run build` |
+| `frontend/*.tsbuildinfo` | — | `npx tsc -b` |
+| 全仓 `__pycache__/` `*.pyc` | — | 自动生成 |
+
+### `.tmp/` 不可再生，所以先证明「删了不丢信息」
+
+47 个文件：`ast.txt` / `full.txt`（1.3M Java AST dump）、`g2_*.py`、各类 `.out`/`.sum`/`.log`、
+`sync_trellis.py`、`.tmp/sess/s*.md`（历次会话结论）。
+
+抽查 4 个标志性细节在归档任务里是否还在：
+
+| 细节 | 归档位置 | 在？ |
+|---|---|---|
+| `SuccessRate.percent` 分母含降级 | `10-16-backend-api/research/10` | ✅ |
+| `adjustWordCount` 手工 `update_time` | 同上 | ✅ |
+| U+2212 在 GBK 控制台崩溃 | `implement.md` / `research/11` | ✅ |
+| `clean-smoke-data` 前缀白名单 | `implement.md` | ✅ |
+
+结论：`.tmp/sess` 是「归档文档的草稿」，正式版已在 `.trellis/tasks/archive/`，
+删除安全。
+
+### 关键：删完必须真跑一遍重建
+
+这是本次唯一有实质风险的地方。「这些都能再生」是**假设**，不验证就是空话。
+逐个真跑：
+
+| 项 | 结果 |
+|---|---|
+| `npm install && npx tsc -b && npm run build` | ✅ 8.22s |
+| `mvn -o compile` | ✅ EXIT=0 |
+| `python -m venv .venv && pip install -r && pytest` | ✅ 60 passed, 4 skipped |
+| 4 套管理端验证 | ✅ 47 / 27 / 61 / 54 全通过 |
+
+验证完**再删一遍**，回到 35M。这一步容易漏——只删不验是赌，只验不删是白删。
+
+### 顺手修的一个真缺陷
+
+`verify_admin_frontend.py` 在无 `node_modules` 时：`npx esbuild` 静默失败
+（`returncode != 0` 但 `stderr` 为空），脚本只打印「✗ esbuild 失败：」然后一行空白，
+**看不出原因**。加前置 `os.path.isdir(node_modules)` 检查 + 明确提示
+`cd frontend && npm install`。
+
+这正是「删构建产物」这个动作暴露出来的——删除让它第一次在无依赖环境下被运行。
+**清理本身也是一次测试。**
+
+### 没碰的
+
+工作区里三项**本任务之前就有**的未提交改动，一律不动、不提交：
+`docs/logo/*.png` 删除（23）、`docs/小程序注册信息-名称简称介绍.md` 删除、
+`miniprogram/project.config.json` 修改（微信开发者工具自动写入）。
+
+提交只 `git add` 4 个路径：任务目录、父任务 `task.json`（`--parent` 自动加的子任务链接）、
+`handoff.md`、`verify_admin_frontend.py`。**无 `git add -A`。**
+
+### 提交
+
+`f338e34` chore(repo): 清理可再生构建产物与一次性调试目录（414M → 35M）
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f338e34` | chore(repo): 清理可再生构建产物与一次性调试目录（414M → 35M） |
+
+### Status
+
+[OK] **Completed**
