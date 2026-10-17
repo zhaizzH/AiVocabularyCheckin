@@ -1050,3 +1050,41 @@ Vite 不要求该目录存在。
 ### Status
 
 [OK] **Completed**
+
+
+## Session 16: 仓库密钥审计（58 提交全历史）+ 提交工作区残留 25 项
+<!-- trellis-session: v=2 fp=8372490af235c552 -->
+
+**Date**: 2026-10-17
+**Task**: 仓库密钥审计（58 提交全历史）+ 提交工作区残留 25 项
+**Branch**: `main`
+
+### Summary
+
+逐 commit 遍历 640 个历史路径确认从未提交 .env 本体或真实密钥；提交 24 项删除 + 小程序配置
+
+### Main Changes
+
+- 逐 commit git ls-tree + git grep 审计全历史，确认零密钥泄露（.env.example 仅占位符且刻意不用 sk- 前缀）
+- git check-ignore -v 验证 ai-service/.env、application-local.yml、.tmp/ 均被正确忽略且从未提交
+- 提交 25 项工作区残留：23 个 docs/logo png 删除 + 1 个一次性文档删除 + project.config.json IDE 自动字段
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `68bb9bd` | chore(repo): 提交工作区残留改动（24 项删除 + 小程序配置） |
+
+### Testing
+
+- [OK] git grep 逐 commit 扫描 sk-/AKIA/PRIVATE KEY/ghp_/32位hex/Bearer：全部 0 命中
+- [OK] git add -A 后核对 staged 数量 = 25，与 git diff 逐项确认一致，无夹带
+- [OK] 提交后 git status 干净（EXIT=0）
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 仓库无 remote；若后续要推送远端，需先配置 origin（历史已确认干净，可安全公开）
