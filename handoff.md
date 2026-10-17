@@ -395,7 +395,55 @@ cd frontend && npx tsc -b && npm run build
 
 ---
 
-## 9. 风险与待办
+## 9. 工作区清理记录（2026-10-17）
+
+仓库曾堆积约 **379MB** 可再生内容。无任何业务影响（全部被 `.gitignore` 忽略，从未进过提交），但会拖慢编辑器索引、占磁盘、干扰 `git status` 判断。已按下列清单清理，删前逐项确认「能靠一条命令再生」。
+
+### 删除了什么（414M → 35M）
+
+| 路径 | 大小 | 再生方式 |
+|---|---|---|
+| `frontend/node_modules/` | 216M | `cd frontend && npm install` |
+| `ai-service/.venv/` | 129M | `cd ai-service && python -m venv .venv && .venv/Scripts/python -m pip install -r requirements.txt` |
+| `backend/target/` | 32M | `cd backend && mvn -o package` |
+| `.tmp/` | 1.8M | **不可再生**，但内容全是一次性调试残留（见下） |
+| `frontend/dist/` | 1.2M | `cd frontend && npm run build` |
+| `frontend/*.tsbuildinfo` | 小 | `cd frontend && npx tsc -b` |
+| 全仓 `__pycache__/`、`*.pyc` | 小 | 运行 Python 时自动生成 |
+
+### `.tmp/` 里到底是什么
+
+47 个文件，全是一次性调试产物：`ast.txt` / `full.txt`（1.3M，Java AST dump）、`g2_*.py`（阶段 2 的临时核对脚本）、各类 `.out` / `.sum` / `.log`（冒烟脚本输出快照）、`sync_trellis.py`、`.tmp/sess/s*.md`（历次会话结论文本）、`git-status.txt`。
+
+**删除前已抽查确认信息不丢**：`.tmp/sess/*.md` 里的技术细节（`SuccessRate.percent` 分母含降级的口径、`adjustWordCount` 手工 `update_time`、U+2212 减号在 GBK 控制台崩溃、`grep -c` 中文计数踩坑）在 `.trellis/tasks/archive/2026-10/10-16-backend-api/` 的 `implement.md`、`research/10`、`research/11` 中均有完整记载；会话结论本身在 `journal-1.md`。
+
+### 明确保留（用户决策）
+
+- **`backend/scripts/` 全部 10 个**：`g4-smoke.py` / `g4-crossday.py` / `g5-smoke.py` / `stage9-stats-smoke.py` / `stage10-admin-smoke.py` 虽是为闸口写的一次性验收脚本，但被 `smoke-test.sh` 一键自测调用（共 143 用例）；`verify-schema-entities.py` / `verify-h2-schema-parity.py` 是结构一致性护栏，防「H2 绿、MySQL 红」的假绿。
+- `ai-service/scripts/`（2）、`scripts/`（7）、`miniprogram/scripts/`（10）全部保留。
+
+### 删后验证（确保「删了还能重建」）
+
+| 项 | 结果 |
+|---|---|
+| `cd frontend && npm install && npx tsc -b && npm run build` | ✅ 8.22s 构建成功 |
+| `cd backend && mvn -o compile` | ✅ EXIT=0 |
+| `cd ai-service && python -m venv .venv && pip install -r requirements.txt && pytest` | ✅ **60 passed, 4 skipped** |
+| `verify_admin_web.py` / `verify_admin_frontend.py` | ✅ 47 / 27 项通过 |
+| `verify_admin_api.py` | ✅ 61 项通过（真后端） |
+| `verify_admin_e2e.py` | ✅ 54 项通过（Vite + Chrome + 真后端） |
+
+验证完又把产物删了一遍，工作区回到 35M 的纯源码状态。
+
+### `.gitignore` 复核
+
+14 项逐条用 `git check-ignore -v` 验证命中：`node_modules/`、`.venv/`、`target/`、`dist/`、`*.tsbuildinfo`、`.tmp/`、`__pycache__/`、`*.pyc`、`.verify_*.cjs`、`.verify_entry.ts`、`ai-service/.env`、`frontend/.env`、`miniprogram/project.private.config.json`、`*.key`。无需补充。
+
+> **首次 clone 后要跑什么**：`cd frontend && npm install`、`cd ai-service && python -m venv .venv && .venv/Scripts/python -m pip install -r requirements.txt`、`cd backend && mvn package`。其余（词库数据）用 `scripts/fetch-vocab.sh` 拉取，见 §7。
+
+---
+
+## 10. 风险与待办
 
 | 项 | 说明 | 建议 |
 |---|---|---|---|
@@ -409,7 +457,7 @@ cd frontend && npx tsc -b && npm run build
 
 ---
 
-## 10. 交接检查清单
+## 11. 交接检查清单
 
 接手后建议按序确认：
 
@@ -425,7 +473,7 @@ cd frontend && npx tsc -b && npm run build
 
 ---
 
-## 11. 尚待解决的外部依赖（阻塞项汇总）
+## 12. 尚待解决的外部依赖（阻塞项汇总）
 
 1. **无硬阻塞** — backend / ai-service / miniprogram 均可运行、可复现、可验证。
 2. 仅剩两项非阻塞待办：真机 `wx-login` 全链路、关于页「第 N 组」文案。

@@ -22,7 +22,8 @@
     "10-16-backend-api",
     "10-16-ai-service",
     "10-16-miniprogram-student",
-    "10-16-admin-web"
+    "10-16-admin-web",
+    "10-17-repo-cleanup"
   ],
   "parent": null,
   "relatedFiles": [],

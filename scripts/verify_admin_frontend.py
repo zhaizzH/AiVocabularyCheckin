@@ -399,6 +399,13 @@ def main() -> int:
 
     io.open(ENTRY, "w", encoding="utf-8").write(ENTRY_SOURCE)
 
+    # 前置检查：esbuild 来自 frontend/node_modules，删了依赖目录时 npx 会静默
+    # 失败（stderr 为空），只打印「esbuild 失败：」看不出原因。
+    if not os.path.isdir(os.path.join(FRONTEND, "node_modules")):
+        print("✗ 缺少 %s/node_modules" % FRONTEND)
+        print("  先执行: cd frontend && npm install")
+        return 1
+
     # 用 esbuild 打包真实源码为 CommonJS（external 掉 axios，让 Node 用自己的）
     npx = "npx.cmd" if os.name == "nt" else "npx"
     try:
