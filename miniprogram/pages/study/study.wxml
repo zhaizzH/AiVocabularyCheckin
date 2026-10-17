@@ -1,6 +1,146 @@
-<view class="page-wrap">
-  <view class="empty">
-    <view class="empty-title">学习</view>
-    <view class="empty-desc">待实现</view>
+<!-- 打卡成功页：非 null 时整页替换为结果 -->
+<view class="page-wrap checkin-done" wx:if="{{checkInResult}}">
+  <view class="done-icon">🎉</view>
+  <view class="done-title">打卡成功</view>
+
+  <view class="done-streak">
+    <view class="done-streak-num">{{checkInResult.streakDays}}</view>
+    <view class="done-streak-label">连续打卡天数</view>
   </view>
+
+  <view class="done-stats">
+    <view class="done-stat">
+      <view class="done-stat-num">{{checkInResult.todayLearned}}</view>
+      <view class="done-stat-label">今日学词</view>
+    </view>
+    <view class="done-stat-sep"></view>
+    <view class="done-stat">
+      <view class="done-stat-num">{{checkInResult.todayMistakes}}</view>
+      <view class="done-stat-label">今日错题</view>
+    </view>
+  </view>
+
+  <view class="btn btn-ghost done-btn" bindtap="goMistakes" wx:if="{{checkInResult.todayMistakes > 0}}">查看错题</view>
+  <view class="btn btn-primary done-btn" bindtap="goHome">回到首页</view>
+</view>
+
+<view class="page-wrap study-page" wx:else>
+  <view class="loading-tip" wx:if="{{loading}}">加载中…</view>
+
+  <!-- 无计划 / 加载失败 -->
+  <view class="empty" wx:elif="{{errorMsg}}">
+    <view class="empty-icon">😵</view>
+    <view class="empty-title">加载失败</view>
+    <view class="empty-desc">{{errorMsg}}</view>
+    <view class="btn btn-primary empty-btn" bindtap="loadPlan">重新加载</view>
+  </view>
+
+  <view class="empty" wx:elif="{{plan && plan.total === 0}}">
+    <view class="empty-icon">📚</view>
+    <view class="empty-title">今天还没有学习任务</view>
+    <view class="empty-desc">先加入一本词书，我们会为你安排每日任务</view>
+    <view class="btn btn-primary empty-btn" bindtap="goBooks">去选词书</view>
+  </view>
+
+  <block wx:else>
+    <!-- 顶部进度 -->
+    <view class="top-bar">
+      <view class="top-progress">
+        <text class="top-current">{{index + 1}}</text>
+        <text class="top-total">/{{plan.words.length}}</text>
+      </view>
+      <view class="top-meta">
+        <text wx:if="{{current.isReview}}" class="tag tag-success">复习</text>
+        <text wx:else class="tag">新词</text>
+      </view>
+    </view>
+
+    <view class="bar-track">
+      <view
+        class="bar-fill"
+        style="width: {{plan.words.length > 0 ? ((index + 1) / plan.words.length * 100) : 0}}%"
+      ></view>
+    </view>
+
+    <!-- 单词卡：点击翻面 -->
+    <view class="word-card {{flipped ? 'card-flipped' : ''}}" bindtap="onFlip">
+      <view wx:if="{{!flipped}}" class="card-face card-front">
+        <view class="word-text">{{current.word}}</view>
+        <view class="word-phonetic" wx:if="{{current.phonetic}}">{{current.phonetic}}</view>
+        <view class="flip-hint">轻点卡片查看释义</view>
+      </view>
+
+      <view wx:else class="card-face card-back">
+        <view class="word-small">{{current.word}}</view>
+        <view class="word-phonetic-small" wx:if="{{current.phonetic}}">{{current.phonetic}}</view>
+        <view class="divider"></view>
+        <!-- 多义项分条显示 -->
+        <view class="meaning-list">
+          <view class="meaning-item" wx:for="{{meanings}}" wx:key="*this">{{item}}</view>
+        </view>
+        <view class="flip-hint">轻点返回</view>
+      </view>
+    </view>
+
+    <!-- AI 例句入口 / 结果 -->
+    <view class="ai-area">
+      <view
+        class="btn btn-ghost ai-btn {{aiLoading ? 'btn-disabled' : ''}}"
+        bindtap="onRequestAiExample"
+      >{{aiLoading ? '生成中…' : (aiExample ? '再看一次 AI 例句' : '✦ AI 例句')}}</view>
+
+      <view class="ai-error" wx:if="{{aiError}}">{{aiError}}</view>
+
+      <view class="ai-panel" wx:if="{{aiExample}}">
+        <!-- 降级必须明确标注，否则用户以为这是 AI 生成的内容 -->
+        <view class="warnbar" wx:if="{{aiDegraded}}">
+          AI 暂时不可用，以下为词库内置例句
+        </view>
+
+        <view class="ai-en">{{aiExample.example}}</view>
+        <view class="ai-cn" wx:if="{{aiExample.exampleTranslation}}">{{aiExample.exampleTranslation}}</view>
+
+        <block wx:if="{{aiExample.mnemonic}}">
+          <view class="divider"></view>
+          <view class="ai-mnemonic-label">记忆方法</view>
+          <view class="ai-mnemonic">{{aiExample.mnemonic}}</view>
+        </block>
+
+        <view class="ai-close" bindtap="onCloseAiExample">收起</view>
+      </view>
+    </view>
+
+    <!-- 认识 / 不认识 -->
+    <view class="answer-row">
+      <view
+        class="answer-btn answer-no {{submitting ? 'btn-disabled' : ''}}"
+        data-known="{{false}}"
+        bindtap="onAnswer"
+      >✗ 不认识</view>
+      <view
+        class="answer-btn answer-yes {{submitting ? 'btn-disabled' : ''}}"
+        data-known="{{true}}"
+        bindtap="onAnswer"
+      >✓ 认识</view>
+    </view>
+
+    <view class="nav-row">
+      <view class="nav-btn {{index === 0 ? 'nav-disabled' : ''}}" bindtap="onPrev">← 上一个</view>
+    </view>
+
+    <!-- 打卡 -->
+    <view class="checkin-area">
+      <view class="checkin-tip" wx:if="{{plan.checkedIn}}">今日已打卡 ✓</view>
+      <view
+        class="btn {{plan.checkedIn ? 'btn-gray' : (plan.finished >= plan.total ? 'btn-primary' : 'btn-gray')}} checkin-btn {{checkInLoading ? 'btn-disabled' : ''}}"
+        bindtap="onCheckIn"
+      >
+        <block wx:if="{{checkInLoading}}">打卡中…</block>
+        <block wx:elif="{{plan.checkedIn}}">已打卡 ✓</block>
+        <block wx:elif="{{plan.finished >= plan.total}}">完成打卡</block>
+        <!-- 分母用 plan.total，绝不能写死 20 -->
+        <block wx:else>完成学习后打卡（{{plan.finished}}/{{plan.total}}）</block>
+      </view>
+    </view>
+  </block>
 </view>

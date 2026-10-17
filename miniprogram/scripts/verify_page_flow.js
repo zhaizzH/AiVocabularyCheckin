@@ -163,8 +163,13 @@ function freshModules(mock) {
     }
   });
   global.wx = mock.wx;
+  // getApp() 在真机上是单例：每次返回新对象会让页面内「读-改-写」的缓存失效。
+  // mock 必须同样稳定，否则缓存用例会误报失败。
+  if (!mock.app) {
+    mock.app = { globalData: { token: '', userInfo: null, aiExampleCache: {} } };
+  }
   global.getApp = function () {
-    return { globalData: { token: '', userInfo: null, aiExampleCache: {} } };
+    return mock.app;
   };
   return {
     request: require(path.join(ROOT, 'utils', 'request.js')),
@@ -828,6 +833,234 @@ async function main() {
         assert.deepStrictEqual(page.data.books, []);
         assert.ok(page.data.errorMsg, '应有错误文案');
         assert.strictEqual(page.data.loading, false);
+      } finally {
+        mock.wx.request = origReq;
+      }
+    });
+  }
+
+  // ============================================================ 学习（F4/F5）
+  group('学习页（pages/study）逐词上报、翻面、AI 例句、打卡');
+  {
+    const mock = createWxMock();
+    const m = freshModules(mock);
+
+    const uname = 'st_' + Math.random().toString(36).slice(2, 10);
+    await m.auth.register({ username: uname, password: 'Test123456' });
+    const login = await m.auth.login({ username: uname, password: 'Test123456' });
+    m.storage.setToken(login.token);
+    const books = await m.book.listBooks('');
+    await m.book.selectBook(books[0].bookId);
+
+    await test('加载计划后当前词有值、义项已拆分、未翻面', async () => {
+      const page = loadPage('pages/study/study.js', mock);
+      await page.loadPlan();
+      assert.ok(page.data.plan.total > 0, 'total 应 > 0');
+      assert.ok(page.data.current, 'current 应有值');
+      assert.ok(page.data.current.word, '当前词应有 word');
+      assert.ok(Array.isArray(page.data.meanings) && page.data.meanings.length > 0,
+        '义项应已拆分为数组');
+      assert.strictEqual(page.data.flipped, false);
+      assert.strictEqual(page.data.loading, false);
+    });
+
+    await test('点击卡片翻面，再点返回', async () => {
+      const page = loadPage('pages/study/study.js', mock);
+      await page.loadPlan();
+      page.onFlip();
+      assert.strictEqual(page.data.flipped, true);
+      page.onFlip();
+      assert.strictEqual(page.data.flipped, false);
+    });
+
+    await test('答「认识」后前进到下一个词并重置翻面/例句状态', async () => {
+      const page = loadPage('pages/study/study.js', mock);
+      await page.loadPlan();
+      page.onFlip();
+      const before = page.data.current.wordId;
+
+      await page.onAnswer({ currentTarget: { dataset: { known: true } } });
+
+      assert.notStrictEqual(page.data.current.wordId, before, '应前进到下一个词');
+      assert.strictEqual(page.data.flipped, false, '翻面状态应重置');
+      assert.strictEqual(page.data.aiExample, null, 'AI 例句应清空');
+      assert.strictEqual(page.data.submitting, false, 'submitting 应复位');
+    });
+
+    await test('答「不认识」会把词收录进错题本', async () => {
+      const page = loadPage('pages/study/study.js', mock);
+      await page.loadPlan();
+      const before = await m.mistake.listMistakes({ page: 1, size: 20 });
+
+      await page.onAnswer({ currentTarget: { dataset: { known: false } } });
+
+      const after = await m.mistake.listMistakes({ page: 1, size: 20 });
+      assert.strictEqual(after.total, before.total + 1, '错题数应 +1');
+    });
+
+    await test('学完最后一个词后 finished 立即同步到位（不能有竞态窗口）', async () => {
+      // 这个用例只调「一次」onAnswer 就断言，不靠循环重试。
+      // 原因：循环会在后台 loadPlan 完成后重试，从而掩盖竞态。
+      // 真实场景是用户学完最后一词立刻点打卡，若 advance() 里的 loadPlan
+      // 没有被 await，此时 finished 还是旧值，打卡按钮仍禁用，用户以为白学了。
+      const uname3 = 'st_' + Math.random().toString(36).slice(2, 10);
+      await m.auth.register({ username: uname3, password: 'Test123456' });
+      const lg3 = await m.auth.login({ username: uname3, password: 'Test123456' });
+      m.storage.setToken(lg3.token);
+      const bs3 = await m.book.listBooks('');
+      await m.book.selectBook(bs3[0].bookId);
+
+      const page = loadPage('pages/study/study.js', mock);
+      await page.loadPlan();
+      assert.strictEqual(page.data.plan.finished, 0, '新账号应从 0 开始');
+
+      // 学到只剩最后一个词。
+      // 用 index 判断进度而不是 finished：finished 靠后端返回，中途不会变
+      // （只有学完最后一个词才刷新计划），拿它当循环条件会直接跑满全部词。
+      const totalWords = page.data.plan.words.length;
+      let guard = 0;
+      while (page.data.index < totalWords - 1 && guard++ < 100) {
+        await page.onAnswer({ currentTarget: { dataset: { known: true } } });
+      }
+      assert.strictEqual(page.data.index, totalWords - 1, '前置条件：应停在最后一个词');
+
+      // 只调一次，await 返回后立刻断言——这才是用户点完最后一词的真实时刻
+      await page.onAnswer({ currentTarget: { dataset: { known: true } } });
+
+      assert.strictEqual(page.data.plan.finished, page.data.plan.total,
+        'onAnswer 返回时 finished 必须已同步到 total，否则打卡按钮仍是禁用态');
+    });
+
+    await test('打卡成功返回连续天数与今日统计', async () => {
+      const page = loadPage('pages/study/study.js', mock);
+      await page.loadPlan();
+
+      let guard = 0;
+      while (guard++ < 100) {
+        const plan = page.data.plan;
+        if (!plan || plan.finished >= plan.total) break;
+        await page.onAnswer({ currentTarget: { dataset: { known: true } } });
+      }
+
+      await page.onCheckIn();
+      const r = page.data.checkInResult;
+      assert.ok(r, '打卡应成功');
+      assert.ok(r.streakDays >= 1, 'streakDays 应 >= 1');
+      assert.ok(r.todayLearned > 0, 'todayLearned 应 > 0');
+      assert.strictEqual(typeof r.todayMistakes, 'number');
+      assert.strictEqual(page.data.checkInLoading, false, 'checkInLoading 应复位');
+    });
+
+    await test('重复打卡（3001）不报错弹窗，仅提示已打卡', async () => {
+      const page = loadPage('pages/study/study.js', mock);
+      await page.loadPlan();
+      mock.log.toasts.length = 0;
+
+      await page.onCheckIn();
+
+      assert.ok(!page.data.checkInResult, '不应出现第二次成功页');
+      const titles = mock.log.toasts.map(function (t) { return String(t.title); });
+      assert.ok(
+        titles.some(function (s) { return s.indexOf('已打卡') >= 0; }),
+        '应提示已打卡，实际: ' + JSON.stringify(titles),
+      );
+      assert.strictEqual(page.data.checkInLoading, false);
+    });
+
+    await test('未学完时点打卡不发请求（前端双保险）', async () => {
+      const uname2 = 'st_' + Math.random().toString(36).slice(2, 10);
+      await m.auth.register({ username: uname2, password: 'Test123456' });
+      const lg2 = await m.auth.login({ username: uname2, password: 'Test123456' });
+      m.storage.setToken(lg2.token);
+      const bs = await m.book.listBooks('');
+      await m.book.selectBook(bs[0].bookId);
+
+      const page = loadPage('pages/study/study.js', mock);
+      await page.loadPlan();
+      mock.log.requests.length = 0;
+      mock.log.toasts.length = 0;
+
+      await page.onCheckIn();
+
+      assert.strictEqual(mock.log.requests.length, 0, '未完成时不应请求打卡接口');
+      const titles = mock.log.toasts.map(function (t) { return String(t.title); });
+      assert.ok(titles.some(function (s) { return s.indexOf('完成学习') >= 0; }),
+        '应提示先完成学习，实际: ' + JSON.stringify(titles));
+    });
+
+    await test('AI 例句：degraded=true 时显示警告条且不算错误', async () => {
+      const page = loadPage('pages/study/study.js', mock);
+      await page.loadPlan();
+      const origReq = mock.wx.request;
+
+      mock.wx.request = function (opts) {
+        if (opts.url.indexOf('/ai/example') >= 0) {
+          opts.success({
+            statusCode: 200,
+            data: {
+              code: '0', message: 'ok',
+              data: {
+                wordId: page.data.current.wordId,
+                example: '内置例句内容',
+                exampleTranslation: '内置翻译',
+                mnemonic: '',
+                degraded: true,
+              },
+            },
+          });
+          return;
+        }
+        origReq.call(mock.wx, opts);
+      };
+      try {
+        await page.onRequestAiExample();
+        assert.ok(page.data.aiExample, '降级时仍应有例句可看');
+        assert.strictEqual(page.data.aiDegraded, true, '应标记降级以便显示警告条');
+        assert.strictEqual(page.data.aiError, '', '降级不是错误路径');
+        assert.strictEqual(page.data.aiLoading, false, 'aiLoading 应复位');
+      } finally {
+        mock.wx.request = origReq;
+      }
+    });
+
+    await test('AI 例句：5001 超时显示超时文案且 loading 复位', async () => {
+      // 必须清缓存：上一个降级用例已把同一个词的例句写进 globalData，
+      // 不清会直接命中缓存，请求根本发不出去，用例假失败。
+      mock.app.globalData.aiExampleCache = {};
+      const page = loadPage('pages/study/study.js', mock);
+      await page.loadPlan();
+      const origReq = mock.wx.request;
+      mock.wx.request = function (opts) {
+        if (opts.url.indexOf('/ai/example') >= 0) {
+          opts.success({ statusCode: 200, data: { code: '5001', message: 'AI 服务超时' } });
+          return;
+        }
+        origReq.call(mock.wx, opts);
+      };
+      try {
+        await page.onRequestAiExample();
+        assert.strictEqual(page.data.aiExample, null);
+        assert.ok(page.data.aiError.indexOf('超时') >= 0, '应提示超时: ' + page.data.aiError);
+        assert.strictEqual(page.data.aiLoading, false);
+      } finally {
+        mock.wx.request = origReq;
+      }
+    });
+
+    await test('AI 例句会话内缓存：同词第二次不再发请求', async () => {
+      const page = loadPage('pages/study/study.js', mock);
+      await page.loadPlan();
+      await page.onRequestAiExample();
+      assert.ok(mock.app.globalData.aiExampleCache, '缓存应挂在 globalData');
+
+      const origReq = mock.wx.request;
+      let netCount = 0;
+      mock.wx.request = function (opts) { netCount++; return origReq.call(mock.wx, opts); };
+      try {
+        page.onCloseAiExample();
+        await page.onRequestAiExample();
+        assert.strictEqual(netCount, 0, '命中缓存不应再请求');
+        assert.ok(page.data.aiExample, '缓存数据应可复用');
       } finally {
         mock.wx.request = origReq;
       }
