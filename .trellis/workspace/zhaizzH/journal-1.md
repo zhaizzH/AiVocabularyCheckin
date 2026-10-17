@@ -1088,3 +1088,45 @@ Vite 不要求该目录存在。
 ### Next Steps
 
 - 仓库无 remote；若后续要推送远端，需先配置 origin（历史已确认干净，可安全公开）
+
+
+## Session 17: 公开推送前发现并修复真实 MySQL 密码泄露 + 重写 61 提交历史 + 推送 GitHub
+<!-- trellis-session: v=2 fp=2b4c21b7b4b5302e -->
+
+**Date**: 2026-10-17
+**Task**: 公开推送前发现并修复真实 MySQL 密码泄露 + 重写 61 提交历史 + 推送 GitHub
+**Branch**: `main`
+
+### Summary
+
+审计发现 4 个脚本与 2 份文档硬编码真实 MySQL root 密码；改用环境变量 + filter-repo 重写全历史清除；排除 AI 工具目录后首次推送 public 仓库
+
+### Main Changes
+
+- 修复 4 个脚本硬编码的真实 MySQL 密码（verify_e2e/report/review_flow.py、create-admin.py），改为 DBPASS 环境变量读取
+- handoff.md 与 research/08 中的明文密码替换为占位说明
+- git-filter-repo 重写 61 提交历史，清除 <REDACTED_DB_PASSWORD> 与 AppSecret 候选值，重写前 mirror 备份到 ../_backup/
+- 排除 .claude/.agents/.pi/.workbuddy 共 105 文件 865K（AI 脚手架，含本机路径），跟踪文件 590→461
+- 文档本机绝对路径 C:\workspace\class\... 全部替换为 <repo-root>
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cbad462` | chore(repo): 公开前清理——去硬编码凭据 + 排除 AI 工具目录 |
+
+### Testing
+
+- [OK] git-filter-repo 后三层校验：HEAD tree 一致 / 逐 commit tree 差异仅落在含密码文件 / 全 blob 遍历 0 命中
+- [OK] 4 个改动脚本 python -m py_compile 全部通过
+- [OK] 远端终检：遍历 origin/main 全部 blob 扫 sk-/AKIA/PRIVATE KEY/旧密码，0 命中
+- [OK] git rev-parse HEAD origin/main 三方一致 = cbad462，远端 61 提交 461 文件
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 建议吊销并更换该 MySQL 密码（曾在本地明文存在较久），GitHub 上从未出现含密码的 commit 故非紧急
+- README 缺失；公开仓库建议补一份，目前以 handoff.md 承担说明职责

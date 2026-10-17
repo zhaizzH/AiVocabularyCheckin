@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 16
+- **Total Sessions**: 17
 - **Last Active**: 2026-10-17
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1090 | Active |
+| `journal-1.md` | ~1132 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 17 | 2026-10-17 | 公开推送前发现并修复真实 MySQL 密码泄露 + 重写 61 提交历史 + 推送 GitHub | `cbad462` | `main` |
 | 16 | 2026-10-17 | 仓库密钥审计（58 提交全历史）+ 提交工作区残留 25 项 | `68bb9bd` | `main` |
 | 15 | 2026-10-17 | 全仓一次性文件与构建产物清理 | `f338e34` | `main` |
 | 14 | 2026-10-17 | 管理端 admin-web S1–S7 完成并归档（4 页 / 225 断言 / 修无限重渲染真缺陷） | `e464326` | `main` |
