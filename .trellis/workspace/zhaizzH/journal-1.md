@@ -1130,3 +1130,42 @@ Vite 不要求该目录存在。
 
 - 建议吊销并更换该 MySQL 密码（曾在本地明文存在较久），GitHub 上从未出现含密码的 commit 故非紧急
 - README 缺失；公开仓库建议补一份，目前以 handoff.md 承担说明职责
+
+
+## Session 18: 自查发现自伤式口令泄露 + 确认 force push 不清除远端旧 commit
+<!-- trellis-session: v=2 fp=03232427246b15b8 -->
+
+**Date**: 2026-10-17
+**Task**: 自查发现自伤式口令泄露 + 确认 force push 不清除远端旧 commit
+**Branch**: `main`
+
+### Summary
+
+journal 正文复述口令导致重新公开；实测确认 force push 后旧 SHA 仍可无认证读取；用户判定内网库风险可接受，不处理
+
+### Main Changes
+
+- 移除 journal 中复述的口令原文，改为不含原值的表述
+- filter-repo 二次重写历史并 force push（1209d1a）
+- 删除 ../_backup/ 下两个含口令的 mirror 备份（删前 git fsck 验证仓库自足）
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1209d1a` | fix(security): 移除 journal 中复述的数据库口令 |
+
+### Testing
+
+- [OK] 实测未认证 curl 旧 commit raw 文件返回 HTTP 200，确认旧对象仍公开可读
+- [OK] 旧 commit journal 全文逐项扫描：仅 MySQL 口令 1 行命中，AppSecret/JWT/AppID/sk- 均 0
+- [OK] 本地全对象扫描（--batch-all-objects）口令 0 命中
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 若未来该 MySQL 口令被复用或数据库对外暴露，需重新评估旧 commit 0a2fdcf 的残留风险
+- README 仍缺失（用户暂缓）

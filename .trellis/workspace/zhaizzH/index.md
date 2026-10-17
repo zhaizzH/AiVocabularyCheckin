@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 17
+- **Total Sessions**: 18
 - **Last Active**: 2026-10-17
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1132 | Active |
+| `journal-1.md` | ~1171 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 18 | 2026-10-17 | 自查发现自伤式口令泄露 + 确认 force push 不清除远端旧 commit | `1209d1a` | `main` |
 | 17 | 2026-10-17 | 公开推送前发现并修复真实 MySQL 密码泄露 + 重写 61 提交历史 + 推送 GitHub | `cbad462` | `main` |
 | 16 | 2026-10-17 | 仓库密钥审计（58 提交全历史）+ 提交工作区残留 25 项 | `68bb9bd` | `main` |
 | 15 | 2026-10-17 | 全仓一次性文件与构建产物清理 | `f338e34` | `main` |
