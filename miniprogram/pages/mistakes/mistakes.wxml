@@ -1,0 +1,6 @@
+<view class="page-wrap">
+  <view class="empty">
+    <view class="empty-title">错题本</view>
+    <view class="empty-desc">待实现</view>
+  </view>
+</view>

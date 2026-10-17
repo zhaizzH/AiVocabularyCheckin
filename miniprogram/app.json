@@ -1,0 +1,38 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/study/study",
+    "pages/review/review",
+    "pages/mistakes/mistakes",
+    "pages/stats/stats",
+    "pages/me/me",
+    "pages/login/login",
+    "pages/setup-nickname/setup-nickname",
+    "pages/books/books",
+    "pages/report/report",
+    "pages/about/about"
+  ],
+  "window": {
+    "navigationBarTitleText": "AI 单词打卡",
+    "navigationBarBackgroundColor": "#4a6cf7",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f7f8fa",
+    "backgroundTextStyle": "light"
+  },
+  "tabBar": {
+    "color": "#999999",
+    "selectedColor": "#4a6cf7",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      { "pagePath": "pages/index/index", "text": "首页" },
+      { "pagePath": "pages/study/study", "text": "学习" },
+      { "pagePath": "pages/review/review", "text": "复习" },
+      { "pagePath": "pages/mistakes/mistakes", "text": "错题" },
+      { "pagePath": "pages/stats/stats", "text": "统计" },
+      { "pagePath": "pages/me/me", "text": "我的" }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

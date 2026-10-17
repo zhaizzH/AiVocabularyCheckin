@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "评审清单逐条核对：无 console.log、无页面内裸 wx.request、无硬编码后端地址、无 setData 大对象、app.wxss 无页面专属样式、无不必要的复制粘贴页面、88rpx 点击区、rpx 单位"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "结构与命名核对：pages 每页四件套齐全并在 app.json 注册、services 按资源分文件且只走 utils/request、constants 集中在 utils、目录小写 kebab-case"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "状态核对：token/userInfo 只在 globalData + Storage、时效数据确在 onShow 刷新、一次性数据在 onLoad、无重复请求与无未清理的定时器、AI 例句会话缓存有明确作用域"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "字段口径核对：页面/服务层使用的字段名与后端 DTO 逐字一致（bookId/wordId/checkedIn/finished/total/streakDays/todayReviewCount/learnedCount/masteryRate/mistakeId/wrongCount/mistakeId 等），错误码用常量非魔法数字"}
+{"file": "docs/学生端-需求分析与原型设计.md", "reason": "验收对照源：逐条核对 F1–F10 的界面元素清单与状态设计是否全部落地（尤其空态 A/B、AI 三态、打卡成功页、数据不足态、401 态），以及全局规则 6 条"}
+{"file": "docs/prototype/miniprogram-states.html", "reason": "状态变体逐一比对：9 个态是否都有对应实现（首页未选词书空态、打卡成功、AI 例句加载/降级黄条、复习空态、错题讲解展开、报告数据不足、统计无数据、401 全局）"}
+{"file": "docs/接口详细设计.md", "reason": "契约核对：请求体字段、响应字段、HTTP 方法、路径、分页参数（page/size）、Result 包装（code/message/data）、401 与 code=1006 的处理口径逐字一致"}
+{"file": ".trellis/tasks/10-16-miniprogram-student/research/01-backend-contract-facts.md", "reason": "核对口径依据：字段名逐字一致、错误码分支齐全（3001/3002/3003/5001/5002/5003/1004/1006）、打卡文案用真实 total、头像值域 avatar_1..6、热力图直接用后端 level 不自行分档、F9 空态不看 masteryRate"}

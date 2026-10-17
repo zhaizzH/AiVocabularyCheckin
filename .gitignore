@@ -38,6 +38,10 @@ target/
 miniprogram/.dist/
 project.private.config.json
 
+# Mini program code-upload private keys (never commit)
+*.key
+private.*.key
+
 # OS / editors
 .DS_Store
 Thumbs.db

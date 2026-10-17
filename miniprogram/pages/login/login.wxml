@@ -1,0 +1,83 @@
+<view class="page-wrap login-page">
+  <view class="brand">
+    <view class="brand-logo">📖</view>
+    <view class="brand-title">AI 单词打卡</view>
+    <view class="brand-sub">每天 20 个词，AI 帮你记得更牢</view>
+  </view>
+
+  <view class="card">
+    <view class="tabs">
+      <view
+        class="tab {{mode === 'login' ? 'tab-active' : ''}}"
+        data-mode="login"
+        bindtap="switchMode"
+      >登录</view>
+      <view
+        class="tab {{mode === 'register' ? 'tab-active' : ''}}"
+        data-mode="register"
+        bindtap="switchMode"
+      >注册</view>
+    </view>
+
+    <view class="form">
+      <view class="field">
+        <view class="field-label">用户名</view>
+        <input
+          class="field-input"
+          type="text"
+          value="{{username}}"
+          placeholder="请输入用户名"
+          placeholder-class="field-placeholder"
+          maxlength="32"
+          bindinput="onInputUsername"
+        />
+      </view>
+
+      <view class="field">
+        <view class="field-label">密码</view>
+        <input
+          class="field-input"
+          password="{{true}}"
+          value="{{password}}"
+          placeholder="请输入密码"
+          placeholder-class="field-placeholder"
+          maxlength="64"
+          bindinput="onInputPassword"
+        />
+      </view>
+
+      <view class="field" wx:if="{{mode === 'register'}}">
+        <view class="field-label">昵称（选填）</view>
+        <input
+          class="field-input"
+          type="text"
+          value="{{nickname}}"
+          placeholder="不填则使用用户名"
+          placeholder-class="field-placeholder"
+          maxlength="{{nicknameMaxLength}}"
+          bindinput="onInputNickname"
+        />
+      </view>
+
+      <view class="error" wx:if="{{errorMsg}}">{{errorMsg}}</view>
+
+      <view
+        class="btn btn-primary submit-btn {{submitting ? 'btn-disabled' : ''}}"
+        bindtap="onSubmit"
+      >{{submitting ? '处理中…' : (mode === 'login' ? '登录' : '注册并登录')}}</view>
+    </view>
+  </view>
+
+  <view class="divider-row">
+    <view class="divider-line"></view>
+    <view class="divider-text">或</view>
+    <view class="divider-line"></view>
+  </view>
+
+  <view
+    class="btn btn-wx {{wxSubmitting ? 'btn-disabled' : ''}}"
+    bindtap="onWxLogin"
+  >{{wxSubmitting ? '授权中…' : '微信一键登录'}}</view>
+
+  <view class="footnote">登录即表示同意本应用仅用于课程学习</view>
+</view>

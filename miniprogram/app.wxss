@@ -1,0 +1,209 @@
+/**
+ * 全局样式。
+ *
+ * 只放三类东西：设计 token（CSS 变量）、页面级重置、跨页面复用的原子类。
+ * **禁止任何页面专属样式**——页面样式写在各页 .wxss，否则改一处影响所有页。
+ *
+ * 设计来源：docs/prototype/miniprogram-prototype.html
+ * 主色 #4a6cf7 / 页面底 #f7f8fa / 卡片圆角 12 / 按钮圆角 10
+ */
+
+page {
+  --brand: #4a6cf7;
+  --brand-light: #eef1fe;
+  --page-bg: #f7f8fa;
+  --text-main: #333333;
+  --text-sub: #999999;
+  --text-hint: #c0c0c6;
+  --border: #eeeeee;
+  --warn-bg: #fff7e6;
+  --warn-text: #ad6800;
+  --danger: #d4380d;
+  --success: #52c41a;
+  --radius-card: 24rpx;
+  --radius-btn: 20rpx;
+
+  background-color: var(--page-bg);
+  color: var(--text-main);
+  font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 28rpx;
+  line-height: 1.6;
+}
+
+/* ---------- 布局 ---------- */
+
+.page-wrap {
+  padding: 28rpx;
+  box-sizing: border-box;
+  min-height: 100vh;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: var(--radius-card);
+  padding: 28rpx;
+  margin-bottom: 24rpx;
+}
+
+.row {
+  display: flex;
+  gap: 20rpx;
+}
+
+.row-item {
+  flex: 1;
+}
+
+/* ---------- 按钮 ---------- */
+/* min-height 88rpx：满足「可点击元素 ≥ 88rpx 高」的触控要求 */
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 88rpx;
+  border-radius: var(--radius-btn);
+  font-size: 30rpx;
+  text-align: center;
+  box-sizing: border-box;
+  padding: 0 28rpx;
+}
+
+.btn-primary {
+  background: var(--brand);
+  color: #ffffff;
+}
+
+.btn-ghost {
+  background: #ffffff;
+  color: var(--brand);
+  border: 1rpx solid var(--brand);
+}
+
+.btn-gray {
+  background: #e8eaf0;
+  color: var(--text-sub);
+}
+
+.btn-danger {
+  background: #ffffff;
+  color: var(--danger);
+  border: 1rpx solid var(--danger);
+}
+
+/* 禁用态必须明显不可点，否则用户会反复戳已失效的按钮 */
+.btn-disabled {
+  background: #e8eaf0;
+  color: var(--text-sub);
+  pointer-events: none;
+}
+
+/* ---------- 标签 ---------- */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4rpx 20rpx;
+  border-radius: 20rpx;
+  font-size: 22rpx;
+  background: var(--brand-light);
+  color: var(--brand);
+}
+
+.tag-success {
+  background: #f6ffed;
+  color: var(--success);
+}
+
+.tag-danger {
+  background: #fff1f0;
+  color: var(--danger);
+}
+
+.tag-muted {
+  background: #f5f5f5;
+  color: #666666;
+}
+
+/* ---------- 提示条 ---------- */
+
+.warnbar {
+  background: var(--warn-bg);
+  color: var(--warn-text);
+  font-size: 24rpx;
+  padding: 12rpx 20rpx;
+  border-radius: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+/* ---------- 空态 ---------- */
+
+.empty {
+  text-align: center;
+  padding: 120rpx 40rpx;
+  color: var(--text-sub);
+}
+
+.empty-icon {
+  font-size: 88rpx;
+  margin-bottom: 24rpx;
+}
+
+.empty-title {
+  font-size: 30rpx;
+  color: #666666;
+  margin-bottom: 12rpx;
+}
+
+.empty-desc {
+  font-size: 24rpx;
+  margin-bottom: 40rpx;
+}
+
+/* ---------- 文本工具 ---------- */
+
+.text-sub {
+  color: var(--text-sub);
+  font-size: 24rpx;
+}
+
+.text-hint {
+  color: var(--text-hint);
+  font-size: 22rpx;
+}
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ellipsis-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* ---------- 骨架屏 ---------- */
+
+.skeleton {
+  background: linear-gradient(90deg, #eeeeee 25%, #f5f5f5 50%, #eeeeee 75%);
+  background-size: 200% 100%;
+  animation: skeleton-move 1.2s infinite;
+  border-radius: 12rpx;
+}
+
+@keyframes skeleton-move {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* ---------- 分隔线 ---------- */
+
+.divider {
+  height: 1rpx;
+  background: var(--border);
+  margin: 24rpx 0;
+}

@@ -1,0 +1,12 @@
+{"file": "docs/接口详细设计.md", "reason": "字段级冻结契约（唯一事实源）：§1 认证 5 接口（含 §1.3 wx-login 的 code→openid）、§2 词书 4 接口、§3 学习 4 接口（含 §3.3 打卡幂等 3001）、§4 复习、§5 错题、§6 AI 三接口与降级 5001/5002/5003、§7 统计、§0 通用约定（Result 包装、401/1006、分页参数）"}
+{"file": "docs/学生端-需求分析与原型设计.md", "reason": "F1–F10 逐功能需求源：主流程、界面元素清单、状态设计（空态/降级态/成功态）、接口依赖、边界与校验；以及全局设计规则（六 tabBar、onShow 刷新策略、401 处理、AI 三件套加载态与超时、rpx 与 88rpx 点击区）"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "miniprogram/ 目录布局与命名规范：pages 每页一目录（js/json/wxml/wxss 四件套）、services 按后端资源分文件、utils 放 request/date/storage/constants；以及两条硬约束——页面组件禁止裸 wx.request，前端绝不直连 ai-service"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "组件规范：何时抽组件、props 约定、样式方式；本任务的单词卡片/打卡日历格/图表容器三个复用组件必须按此组织"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "页面逻辑复用规范：小程序页面 onLoad/onShow 生命周期与数据请求的职责划分（一次性数据 onLoad、时效数据 onShow），避免每页各写一套加载逻辑"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "状态分类准则：全局状态（token/userInfo 走 globalData + Storage）与页面局部状态的边界，服务端状态不做前端缓存（AI 例句为唯一例外：同词会话内复用）"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "禁用/必须模式：禁 console.log、禁页面内裸请求、禁硬编码后端地址、禁 setData 传大对象、禁在 app.wxss 写页面专属样式、禁提交 token/密钥；88rpx 点击区与 rpx 单位要求"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "与后端 DTO 对齐的字段口径：本任务无 TS，但需按此约定在 utils/constants.js 集中定义接口字段名与错误码常量，避免各页面各自写字符串"}
+{"file": "docs/prototype/miniprogram-prototype.html", "reason": "正常流程视觉参照：13 个页面的布局结构与配色（品牌色 #4a6cf7、卡片圆角 12rpx 级、按钮三种态 primary/ghost/gray）、六 tabBar 图标与文案、每页设计要点旁注"}
+{"file": "docs/prototype/miniprogram-states.html", "reason": "状态变体参照（与本任务验收强相关）：9 个必须实现的态——首页未选词书空态、打卡成功态、AI 例句加载态/降级态（黄条）、复习空态、错题 AI 讲解展开、报告数据不足、统计无数据、全局 401 过期"}
+{"file": "backend/src/main/java/com/vocab/dto/response/", "type": "directory", "reason": "响应字段事实源：BookResponse/StudyPlanResponse/CheckInResponse/ReviewTodayResponse/MistakeResponse/HeatmapResponse/MasteryResponse/ProfileResponse/AiExampleResponse/AiExplainResponse/AiReportResponse 的真实字段名与类型，前端字段必须逐字对齐"}
+{"file": ".trellis/tasks/10-16-miniprogram-student/research/01-backend-contract-facts.md", "reason": "后端契约实测速查：11 个 client 接口的路径/请求/响应字段、Result 包装、全量错误码与前端处理分支、业务常量对前端文案的影响（尤其打卡文案必须用 plan.finished/total 而非写死 20）、以及 4 个实测坑（description 全 null、空数据 masteryRate=100、level 由后端算好、degraded 也是 200）"}

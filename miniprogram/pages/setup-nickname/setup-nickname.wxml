@@ -1,0 +1,42 @@
+<view class="page-wrap setup-page">
+  <view class="header">
+    <view class="header-title">完善你的资料</view>
+    <view class="header-sub">让学习记录更有归属感</view>
+  </view>
+
+  <view class="card">
+    <view class="section-label">选择头像</view>
+    <view class="avatar-grid">
+      <view
+        wx:for="{{avatars}}"
+        wx:key="value"
+        class="avatar-item {{avatar === item.value ? 'avatar-active' : ''}}"
+        data-value="{{item.value}}"
+        bindtap="onPickAvatar"
+      >{{item.emoji}}</view>
+    </view>
+
+    <view class="divider"></view>
+
+    <view class="section-label">昵称</view>
+    <input
+      class="field-input"
+      type="text"
+      value="{{nickname}}"
+      placeholder="请输入昵称"
+      placeholder-class="field-placeholder"
+      maxlength="{{nicknameMaxLength}}"
+      bindinput="onInputNickname"
+    />
+    <view class="counter">{{nickname.length}}/{{nicknameMaxLength}}</view>
+
+    <view class="error" wx:if="{{errorMsg}}">{{errorMsg}}</view>
+  </view>
+
+  <view
+    class="btn btn-primary {{submitting ? 'btn-disabled' : ''}}"
+    bindtap="onSubmit"
+  >{{submitting ? '保存中…' : '完成'}}</view>
+
+  <view class="skip" bindtap="onSkip">跳过，稍后再设置</view>
+</view>
