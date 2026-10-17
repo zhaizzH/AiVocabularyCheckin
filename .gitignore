@@ -28,6 +28,10 @@ venv/
 # Node
 node_modules/
 dist/
+*.tsbuildinfo
+.verify_*.cjs
+.verify_entry.ts
+frontend/.env
 .vite/
 
 # Java / Maven
