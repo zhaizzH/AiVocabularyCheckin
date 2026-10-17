@@ -10,7 +10,7 @@
 **四端系统中，P0 的业务后端（`backend/`）与 P1 的 `ai-service/` 均已完成；`miniprogram/`、`frontend/` 尚未开工。**
 
 - **backend**：33 个对外接口全部实现、7 张表 SQL 就绪、三本种子词书已导入真库（22761 词）、7 道闸口 G1–G7 全部通过、单测基线 **326 tests / 0 failures / 0 errors**。任务 `10-16-backend-api` 已归档。
-- **ai-service**：35 文件 / 58 单测全绿 / 依赖闭包 55 包且 **DB 包为 0**；三接口真实 key 实测 1.1s / 3.7s / 2.4s；与 backend 端到端 `degraded:false` 已验，停服反证回到 `degraded:true` / `5002`。
+- **ai-service**：35 文件 + 单测 60 passed / 4 skipped / 依赖闭包 55 包且 **DB 包为 0**；三接口真实 key 实测约 1.0s / 3.5s / 2.4s（预算 12/25/50s）；与 backend 端到端 `degraded:false` 已验，停服反证回到 `degraded:true` / `5002`；复审修复了 `except BaseException` 吞取消、`APITimeoutError` 误映射 502 两处缺陷并各补回归用例。
 
 **下一步是 `10-16-miniprogram-student`（P1）**，其后 `10-16-admin-web`（P2）。
 
@@ -104,7 +104,7 @@ DBPASS=<MySQL 密码> bash backend/scripts/smoke-test.sh
 
 ## 4. 未完成部分（后续三个子任务）
 
-### 4.1 `10-16-ai-service`（P1，✅ 已完成）
+### 4.1 `10-16-ai-service`（P1，✅ 已完成并归档）
 
 - **工程**：`ai-service/` — FastAPI 0.115.5 + `langchain` 1.3.18 + `langgraph` 1.2.16 + DeepSeek。
 - **3 个接口**：`POST /ai/v1/example`（自控 12s < backend 15s）/ `/explain`（25s < 30s）/ `/report`（50s < 60s）。
@@ -115,8 +115,12 @@ DBPASS=<MySQL 密码> bash backend/scripts/smoke-test.sh
   1. `max_tokens` **必须经 `extra_body`** 传——`langchain-openai 1.7.2` 会改名成 `max_completion_tokens`，DeepSeek 不认；
   2. `pytest.ini` 的 `asyncio_mode = auto` 必须有，否则 async 用例静默 skip 且退出码 0；
   3. lifespan 测试必须用 `app.router.lifespan_context(app)`，裸 `ASGITransport` 不跑 lifespan；
-  4. `DEEPSEEK_THINKING_ENABLED=true` 会在启动校验阶段直接失败（刻意不留开关）。
-- **验证脚本**：`ai-service/scripts/verify_live.py`（三接口直连）、`scripts/e2e_backend.py`（经 backend 中转，支持 `--negative` 验降级）。
+  4. `DEEPSEEK_THINKING_ENABLED=true` 会在启动校验阶段直接失败（刻意不留开关）；
+  5. **禁 `except BaseException`**——会吞掉 `asyncio.CancelledError`，既把断开/停机翻译成 502，又破坏取消协议；
+  6. **`openai.APITimeoutError` 不是 `TimeoutError` 子类**，超时判据必须显式列出它，否则单次超时错走 502。
+- **验证脚本**：`ai-service/scripts/verify_live.py`（三接口直连）、`scripts/e2e_backend.py`（经 backend 中转，支持 `--negative` 验降级）；真实路径单测 `tests/test_live_deepseek.py`（默认 skip，`DEEPSEEK_LIVE_TEST=1` 才跑）。
+- **单测**：60 passed + 4 skipped（live 用例默认跳过）；真实调用实测 example 1048ms / explain 3453ms / report 2433ms。
+- **证据留存**：`.trellis/tasks/10-16-ai-service/research/02-live-verification.md`（真实响应正文 + 耗时 + 失败路径 + 降级反证）、`research/03-implementation-review.md`（复审结论）。
 
 ### 4.2 `10-16-miniprogram-student`（P1）
 
