@@ -1,7 +1,24 @@
 # HANDOFF — AI 单词学习打卡（四端：后端 / ai-service / 小程序 / 管理端）
 
-> 交接文档 · 最后更新 2026-10-17
+> 交接文档 · 最后更新 2026-10-17（HEAD `3009b56`）
 > 仓库根：`C:\workspace\class\AiVocabularyCheckin` · 分支 `main`
+
+---
+
+## 0. 五秒钟了解这个仓库
+
+```
+backend/       Spring Boot 3.5.6 · 33 接口 · 7 表 · 326 单测 · 10 个冒烟/校验脚本
+ai-service/    FastAPI · 3 个 AI 接口 · 60 单测 · 零 DB 依赖
+miniprogram/   微信原生（零第三方库）· 11 页 · 5 tab · 314 断言
+frontend/      React 18 + AntD 5 管理端 · 4 页 · 189 断言
+docs/          契约 V1.2 + S2/S3 + 3 原型
+scripts/       4 套管理端验证 + 建号脚本
+```
+
+**当前状态：四条线的代码全部闭环，只剩 S4 交付文档 `docs/部署说明.md` 没写。**
+
+**刚接手先做三件事**：① 读本文 §11 检查清单；② 读 `journal-1.md` 最近两个 Session；③ 注意工作区有 3 类**非本项目引入**的未提交改动（见 §11 最后一条），别暂存。
 
 ---
 
@@ -11,10 +28,23 @@
 
 - **backend**：33 个对外接口全部实现、7 张表 SQL 就绪、三本种子词书已导入真库（22761 词）、7 道闸口 G1–G7 全部通过、单测基线 **326 tests / 0 failures / 0 errors**。任务 `10-16-backend-api` 已归档。
 - **ai-service**：35 文件 + 单测 60 passed / 4 skipped；三接口真实 key 实测约 1.0s / 3.5s / 2.4s（预算 12/25/50s）；停服反证降级 `degraded:true` / `5002` 已验。
-- **miniprogram**：19 个验证脚本 / 314 断言 + 98 项页面流断言 + 16 项降级断言，编译零错误，任务已归档。
+- **miniprogram**：10 个验证脚本文件 / **8 套件 314 断言**（一键 `verify_all.py`）+ 16 项降级手动，编译零错误，任务已归档。
 - **管理端 `frontend/`**：React 18 + TS + Vite + AntD 5，4 个路由页；**4 套验证脚本共 189 项断言全部通过**（其中 54 项是 Chrome 真实点击驱动，27 项直接执行 TS 源码，61 项打真后端，47 项静态门禁）；`tsc -b` 零错误、`npm run build` 通过。
+- **仓库卫生**：已清理 379MB 可再生产物，工作区 **414M → 36M**，只剩源码与文档（见 §9）。
 
 **下一步只剩 S4 交付文档（`docs/部署说明.md`）**；四个子任务代码侧均已闭环。
+
+### 已验证到什么程度（别怀疑这些数字）
+
+| 层 | 验证方式 | 规模 |
+|---|---|---|
+| 后端逻辑 | JUnit 5 + H2 内存库 | **326 用例** |
+| 后端接口 | 真 MySQL + 真 HTTP（5 个冒烟脚本） | **143 用例** |
+| AI 服务 | pytest + 真实 DeepSeek key | 60 passed / 4 skipped |
+| 小程序 | 静态门禁 + 接口契约 + 页面逻辑 + 全链路 + 降级 | **314 断言** |
+| 管理端 | 静态 47 + 真实 TS 源码 27 + 真接口 61 + Chrome 点击 54 | **189 断言** |
+
+**合计 1032 项自动化断言**，全部在本轮交付中实跑过。
 
 ---
 
@@ -22,15 +52,18 @@
 
 | 任务 | 交付物 | 优先级 | 状态 |
 |---|---|---|---|
-| `10-16-aivocab-fullstack` | 全栈（父任务） | P0 | planning · **3/4 子任务完成** |
+| `10-16-aivocab-fullstack` | 全栈（父任务） | P0 | planning · **5/5 子任务完成，剩 S4 文档** |
 | `10-16-backend-api` | Spring Boot 后端 + SQL + 种子词库 | P0 | ✅ **completed，已归档** |
 | `10-16-ai-service` | FastAPI 三个 AI 接口 | P1 | ✅ **completed（代码+单测+真实调用+联调）** |
 | `10-16-miniprogram-student` | 微信小程序 F1–F10 | P1 | ✅ **completed（11 页 / 314 断言 / 编译零错误）** |
 | `10-16-admin-web` | React 管理端 4 页 | P2 | ✅ **completed（4 页 / 189 断言 / build 通过）** |
+| `10-17-repo-cleanup` | 工作区清理 | P3 | ✅ **completed，已归档** |
+
+归档目录：`.trellis/tasks/archive/2026-10/`（6 个任务）。活跃任务只有父任务 `10-16-aivocab-fullstack`。
 
 任务元数据位于 `.trellis/tasks/<name>/`，含 `prd.md` / `design.md` / `implement.md` / `check.jsonl` / `research/`。
 
-> ⚠️ **任务状态与工作区记忆**：`.trellis/workspace/zhaizzH/journal-1.md` 已记 14 个 session，`index.md` 同步。继续工作时先读 journal 的 Session 13/14 可快速恢复上下文。
+> ⚠️ **任务状态与工作区记忆**：`.trellis/workspace/zhaizzH/journal-1.md` 已记 16 个 session（1054 行），`index.md` 同步。继续工作时先读 journal 的 Session 14/15 可快速恢复上下文（Session 14 = 管理端，Session 15 = 清理）。
 
 ---
 
@@ -49,8 +82,8 @@ backend/
 │   ├── db/V001__init.sql       6 张表
 │   ├── db/V002__word_progress.sql  第 7 张表
 │   └── mapper/*.xml            3 个 XML（仅 Wrapper 表达不了的聚合）
-├── src/test/java/com/vocab/    24 个测试类 + 5 个测试支撑类，326 用例
-└── scripts/                    10 个冒烟/校验脚本
+├── src/test/java/com/vocab/    29 个测试源文件，326 用例
+└── scripts/                    10 个冒烟/校验脚本（全部保留，见 §9）
 ```
 
 ### 3.2 接口总览（33 个，全部实现并自测通过）
@@ -104,7 +137,7 @@ DBPASS=<MySQL 密码> bash backend/scripts/smoke-test.sh
 
 ---
 
-## 4. 各子任务交付详情（4.1/4.2/4.3 已完成，4.4 待做）
+## 4. 各子任务交付详情（4.1–4.3 ✅ 已完成并归档，4.4 ❗唯一剩余）
 
 ### 4.1 `10-16-ai-service`（P1，✅ 已完成并归档）
 
@@ -221,10 +254,55 @@ pages/ components/  →  services/  →  utils/request.ts  →  后端
 - `npm run build` 有 843KB chunk 警告 —— AntD 全量引入，未做按需拆包。管理端是内网低频使用，可接受。
 - 前端不设 `Content-Type`（multipart）—— 手设会丢 `boundary`，后端解析失败（实测返 9001 而非 2004）。
 - `createTime` 原样展示不做 `new Date()` —— Safari 对 `yyyy-MM-dd HH:mm:ss` 不容错。
+- **不做用户状态筛选** —— 实测后端忽略 `status` 参数（传了也返回全部）。宁可不做，也不做假功能。
 
-### 4.4 交付文档（P2）
+**改管理端前必读 — CDP 调试实操手册**
 
-- S4 安装部署说明（含数据库脚本执行步骤、环境变量清单）——`backend/README.md` 已覆盖后端部分，总体部署说明（含四端协同）待补。
+这一节是给「要改 `verify_admin_e2e.py` 或加新的浏览器验证」的人看的。四个真正花时间的坑：
+
+```javascript
+// ① 受控输入框赋值（lib 里直接 el.value = x 不触发 onChange，React 看不到）
+const setter = Object.getOwnPropertyDescriptor(
+  Object.getPrototypeOf(el), 'value').set;
+setter.call(el, v);
+el.dispatchEvent(new Event('input', { bubbles: true }));
+// textarea 必须用 HTMLTextAreaElement.prototype —— 用 input 的 setter `call` 会抛 TypeError
+```
+
+```javascript
+// ② 点按钮必须限定标签，不能只看 textContent
+// AntD 的 form-item > row > col > content > button > span 五层 textContent 完全相同
+// 若按文本在全文档找，会命中外层 div，click() 不提交表单
+const CLICK_TEXT = (t) => `[...document.querySelectorAll(
+  'button, a, .ant-dropdown-menu-item, .ant-popconfirm button')
+].find(e => e.textContent.trim() === t)`;
+```
+
+```javascript
+// ③ AntD Select 要 mousedown 才展开（click 无效）；选项是 .ant-select-item-option
+el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+```
+
+```python
+# ④ DOM.setFileInputFiles 在 nodeId <= 0 时会抛 CDP 错误中断整个脚本
+#    （白屏 / 弹窗未开时必然发生）。必须先判再调，报红往下走。
+if node.get("nodeId", 0) <= 0:
+    check("上传文件（前置缺失跳过）", False)
+else:
+    ws.call("DOM.setFileInputFiles", {...})
+```
+
+**另外两条铁律**（比上面四个坑更重要，因为它关系到「你以为验了其实没验」）：
+
+1. **`Maximum update depth` 只能从 `Runtime.consoleAPICalled` 事件抓**。它是 `console.error`，永不进 `innerText`，`--dump-dom` 也看不到。所以 `WsClient` 必须存事件帧（`if "method" in msg: self.events.append(msg)`），并提供一个 `drain()` 跑一次 `Runtime.evaluate` 把积压事件抽干。
+2. **白屏断言必须三条件同时成立**：`location.pathname === 目标路由` **且** 目标元素已渲染（如 `.ant-table-tbody tr`）**且** `#root.innerHTML.length > 500`。只看 `#root` 非空会被**假通过**——缺陷状态下 `root_len` 是 2163，那是守卫踢回的**登录页** HTML。这条是真实教训：第一版断言在缺陷下全绿。
+
+### 4.4 交付文档（P2，❗唯一剩余工作）
+
+- **S4 安装部署说明 `docs/部署说明.md` —— 尚未写。**
+- 已被现有文档覆盖的部分：`backend/README.md`（后端全套）、`ai-service/README.md`（AI 服务）、本文 §7（命令速查）。
+- 还缺的部分：**四端如何协同启动**（启服务顺序、谁依赖谁、端口约定）、**首次 clone 的环境准备**（见 §9 末尾「首次 clone 后要跑什么」）、环境变量总清单（散在三个 `.env.example` / `application-local.yml.example` 里，没汇总过）、生产部署与本地开发的差异。
+- 建议写这份文档时从**干净 clone** 开始走一遍，别对着现有工作区写——现在仓库里恰好没有任何构建产物（§9），是最适合的状态。
 
 ---
 
@@ -286,6 +364,15 @@ pages/ components/  →  services/  →  utils/request.ts  →  后端
 | DeepSeek API Key | ✅ 已配（`ai-service/.env`，已 gitignore）；真实调用实测 example 1.0s / explain 3.5s / report 2.4s |
 | JWT_SECRET | 本地已生成（`application-local.yml`，不入仓） |
 
+### 私有配置怎么建（不在仓库里，换了机器必须重建）
+
+| 文件 | 模板 | 必填项 |
+|---|---|---|
+| `backend/src/main/resources/application-local.yml` | `application-local.yml.example` | MySQL 密码、`jwt.secret`（≥32 字节）、`wx.appid`/`wx.secret` |
+| `ai-service/.env` | `ai-service/.env.example` | `DEEPSEEK_API_KEY`（其它键有安全默认值） |
+
+> 两个文件都被 `.gitignore` 排除（已实测 `git ls-files` 命中 0）。**`ai-service/.env.example` 里的注释本身就是文档**——尤其 `DEEPSEEK_MODEL` 那行：供应商会退役模型名（`deepseek-chat`/`deepseek-reasoner` 已于 2026-07-24 退役，当前有效值是 `deepseek-flash`），AI 接口突然 502 时先查这里。
+
 ### 已知环境坑（踩过，勿重复）
 
 1. **GBK 终端下不要用 `grep -c` 统计中文输出**——会数错（曾把 46 PASS 数成 47）。改用 python 解析统计。
@@ -294,6 +381,9 @@ pages/ components/  →  services/  →  utils/request.ts  →  后端
 4. 起服务前查 8080 是否被旧 jar 占用。
 5. JDBC 连接串 `characterEncoding=utf8mb4` 非法，须写 `UTF-8`。
 6. `@DynamicPropertySource` 的属性只解析一次——需要按用例变化的配置要手工 `new` 服务，不能靠它。
+7. **`npx` 依赖 `frontend/node_modules`**：仓库已清空构建产物（§9），跑 `verify_admin_frontend.py` / `verify_admin_e2e.py` 前必须先 `cd frontend && npm install`，否则 esbuild 启动失败。脚本现在会明确提示（早先只打印空白的「esbuild 失败：」）。
+8. **停 ai-service 验降级（Windows）**：`netstat -ano | grep :8000` 找 LISTENING 的 PID → `taskkill /F /PID <pid>`。
+9. **`ai-service` 的 venv 路径是 `.venv/Scripts/python.exe`**（Windows），不是 `bin/python`。
 
 ---
 
@@ -308,6 +398,20 @@ pages/ components/  →  services/  →  utils/request.ts  →  后端
 | 提权已有账号 | `python scripts/create-admin.py --promote <username>` |
 
 ## 7. 常用命令速查
+
+> **前提**：仓库里**没有任何构建产物或依赖目录**（2026-10-17 主动清理，见 §9）。首次使用先做下面几步，否则后面所有命令都会失败。
+
+```bash
+# ── 首次配置（只需一次）──
+cd backend  && mvn -o -q clean package -DskipTests   # 拉 Maven 依赖 + 出 jar
+cd frontend && npm install                            # 管理端依赖（~216M）
+cd ai-service && python -m venv .venv \
+  && .venv/Scripts/python -m pip install -r requirements.txt   # AI 服务依赖（~129M）
+
+# 本地私有配置（不入仓，需手工创建）
+#   backend/src/main/resources/application-local.yml  <- 复制 .example，填 MySQL 密码 / JWT_SECRET / 微信 AppID
+#   ai-service/.env                                   <- 复制 .env.example，填 DEEPSEEK_API_KEY
+```
 
 ```bash
 # ── 构建与测试 ──
@@ -397,9 +501,9 @@ cd frontend && npx tsc -b && npm run build
 
 ## 9. 工作区清理记录（2026-10-17）
 
-仓库曾堆积约 **379MB** 可再生内容。无任何业务影响（全部被 `.gitignore` 忽略，从未进过提交），但会拖慢编辑器索引、占磁盘、干扰 `git status` 判断。已按下列清单清理，删前逐项确认「能靠一条命令再生」。
+仓库曾堆积约 **379MB** 可再生内容（414M → 36M，其中 `.git` 约 11M、其余约 25M）。无任何业务影响（全部被 `.gitignore` 忽略，从未进过提交），但会拖慢编辑器索引、占磁盘、干扰 `git status` 判断。已按下列清单清理，删前逐项确认「能靠一条命令再生」。
 
-### 删除了什么（414M → 35M）
+### 删除了什么（414M → 36M）
 
 | 路径 | 大小 | 再生方式 |
 |---|---|---|
@@ -433,7 +537,7 @@ cd frontend && npx tsc -b && npm run build
 | `verify_admin_api.py` | ✅ 61 项通过（真后端） |
 | `verify_admin_e2e.py` | ✅ 54 项通过（Vite + Chrome + 真后端） |
 
-验证完又把产物删了一遍，工作区回到 35M 的纯源码状态。
+验证完又把产物删了一遍，工作区回到 **36M** 的纯源码状态（`.git` 11M + 工作树 25M，无任何构建产物）。
 
 ### `.gitignore` 复核
 
@@ -445,40 +549,76 @@ cd frontend && npx tsc -b && npm run build
 
 ## 10. 风险与待办
 
-| 项 | 说明 | 建议 |
+| 项 | 级别 | 说明 | 建议 |
 |---|---|---|---|
-| `wx-login` 端到端未验 | appid + secret 均有效（微信返回 `40029 invalid code` 证明凭证正确），但真机 `jscode2session` 全链路需真实微信环境 | 真机调试时验；当前账号密码登录链路已全绿 |
-| 关于页「第 N 组」文案 | 待用户提供，现为占位（`groupText: ''`，WXML 用 `wx:if` 隐藏，不影响渲染） | 用户给出后填 `about.js` |
-| PRD 6 tab → 5 tab | 平台硬限制，已决策并回写 prd.md | 已解决，勿回退 |
-| 需求清单 §7 与 S3 V1.2 冲突 | 见 §8 警告 | 回写需求清单（低优先） |
-| 归档任务元数据陈旧 | `description` 仍写 27 接口 | 可忽略（已归档，本就不该再改） |
-| 管理端构建包偏大 | `npm run build` 有 843KB chunk 警告（AntD 全量引入，未按需拆包） | 内网低频使用，可接受；如要优化引入 `babel-plugin-import` 或 vite 手动分块 |
-| 交付文档未写 | `docs/部署说明.md` 未写（S4 最后一项） | 唯一剩余工作 |
+| 交付文档未写 | **高** | `docs/部署说明.md` 未写（S4 最后一项） | **唯一剩余工作**，建议从干净 clone 走一遍再写 |
+| 真机 `wx-login` 未验 | 中 | appid + secret 均有效（微信返回 `40029 invalid code` 证明凭证正确），但真机 `jscode2session` 全链路需真实微信环境 | 真机调试时验；账号密码链路已全绿，不阻塞演示 |
+| 关于页「第 N 组」文案 | 低 | 待用户提供，现为占位（`groupText: ''`，WXML 用 `wx:if` 隐藏，不影响渲染） | 用户给出后填 `about.js` 一行即可 |
+| 管理端构建包偏大 | 低 | `npm run build` 有 843KB chunk 警告（AntD 全量引入，未按需拆包） | 内网低频使用，可接受；要优化则做按需引入或 vite 手动分块 |
+| 需求清单 §7 与 S3 V1.2 冲突 | 低 | 见 §8 警告（需求清单说 code2Session 不做，S3 已纳入且已实现） | 回写需求清单对齐（纯文档） |
+| PRD 6 tab → 5 tab | 已解决 | 平台硬限制（`tabBar.list` 最多 5 项），已决策并回写 `prd.md` | **勿回退**，回退会被编译器直接拒 |
+| 归档任务元数据陈旧 | 忽略 | 归档 `task.json` 的 `description` 仍写 27 接口 | 已归档的任务本就不该再改，别动 |
 
 ---
 
 ## 11. 交接检查清单
 
-接手后建议按序确认：
+接手后建议按序确认（每步都写了预期结果，对不上就是环境问题）：
 
-- [ ] `cd backend && mvn -o test` → 326 tests / 0 failures / 0 errors
-- [ ] `DBPASS=<REDACTED_DB_PASSWORD> bash backend/scripts/smoke-test.sh` → exit 0
-- [ ] 查 `ai_vocab`：`word_book` 3 行、`word` 22761 行
-- [ ] 查 `anime_tracker` 20 表未变
-- [ ] 起后端 8080 + ai-service 8000，`cd miniprogram && PYTHONIOENCODING=utf-8 python scripts/verify_all.py` → 8 套件全绿
-- [ ] 微信开发者工具 `cli.bat preview` → 退出码 0 + 二维码
-- [ ] 读 `.trellis/workspace/zhaizzH/journal-1.md` 恢复上下文
+```bash
+# ① 单元测试（H2 内存库，不依赖本机 MySQL）
+cd backend && mvn -o test                    # 预期：326 tests / 0 failures / 0 errors
+
+# ② 一键冒烟（需真 MySQL；脚本自己拉服务，且断言 ai-service 必须停着）
+DBPASS=<REDACTED_DB_PASSWORD> bash backend/scripts/smoke-test.sh   # 预期：exit 0，143 用例 0 FAIL
+
+# ③ 真实数据核对
+#   word_book 3 行（7508 / 5651 / 9602）、word 22761 行
+#   anime_tracker 20 表未变（红线）
+
+# ④ 小程序（需后端 8080 + ai-service 8000 + MySQL 均已起）
+cd miniprogram && PYTHONIOENCODING=utf-8 python scripts/verify_all.py   # 预期：8 套件 314 断言全绿
+
+# ⑤ 管理端（前两步无需服务，后两步要）
+PYTHONIOENCODING=utf-8 python scripts/verify_admin_web.py        # 47
+PYTHONIOENCODING=utf-8 python scripts/verify_admin_frontend.py   # 27（需 frontend/node_modules）
+PYTHONIOENCODING=utf-8 python scripts/verify_admin_api.py        # 61（需后端 8080）
+PYTHONIOENCODING=utf-8 python scripts/verify_admin_e2e.py        # 54（需 5173 + 8080 + Chrome）
+```
+
+阅读顺序：
+
+- [ ] 读 `.trellis/workspace/zhaizzH/journal-1.md` 的 Session 14/15 恢复上下文
 - [ ] 读 `docs/接口详细设计.md`（V1.2）§9 后再动 AI 相关代码
-- [ ] 确认 `git status` 里 `docs/logo/` 删除**非本任务引入**（其它窗口的改动，勿暂存）
+- [ ] 动后端前读 §5 红线（契约先行 / 时间边界由 Java 传参 / 测试必 `@Transactional`）
+
+⚠️ **最后一条，很容易踩**：`git status` 里会有下列 **3 类非本项目引入**的改动，**不要暂存、不要提交**：
+
+| 改动 | 数量 | 来源 |
+|---|---|---|
+| `docs/logo/*.png` 删除 | 23 | 其它窗口/其它人删的，与四端实现无关 |
+| `docs/小程序注册信息-名称简称介绍.md` 删除 | 1 | 同上（运营文案，与代码无关） |
+| `miniprogram/project.config.json` 修改 | 1 | 微信开发者工具自动写入 `compileWorklet`/`localPlugins`/`condition` 等字段 |
+
+历次任务（backend / miniprogram / admin-web / cleanup）都刻意绕开了这三项，已连续四次未被卷入提交。
 
 ---
 
 ## 12. 尚待解决的外部依赖（阻塞项汇总）
 
-1. **无硬阻塞** — backend / ai-service / miniprogram 均可运行、可复现、可验证。
-2. 仅剩两项非阻塞待办：真机 `wx-login` 全链路、关于页「第 N 组」文案。
-3. `admin-web`（P2）尚未开工，依赖的 `/api/admin/**` 10 个接口已就绪。
+1. **无硬阻塞** — backend / ai-service / miniprogram / 管理端均可运行、可复现、可验证。
+2. 非阻塞待办共 **3 项**：
+   - `docs/部署说明.md` 未写（S4 最后一项，也是唯一有实质工作量的）
+   - 真机 `wx-login` 全链路（凭证已验证有效，缺真实微信环境）
+   - 关于页「第 N 组」文案（等用户提供）
+3. ~~`admin-web`（P2）尚未开工~~ —— **已完成并归档**，10 个 `/api/admin/**` 接口已被管理端全量使用。
 
 ---
 
-*本文档记录截止 HEAD `87f8892` 的真实状态。所有数字（测试数、词数、断言数）均为实测值，非估算。*
+*本文档记录截止 HEAD `3009b56` 的真实状态。所有数字（测试数、词数、断言数、文件数）均为实测值，非估算。*
+
+### 本文档的维护约定
+
+- 每次任务归档后，同步 §1 现状、§2 任务树、§10 待办。
+- **数字必须实测**：`wc -l` / `find | wc -l` / 跑一遍脚本，不凭记忆。
+- 踩过的坑写进对应章节（§3/§4），别只写在 journal——journal 是时序的，handoff 是给接手人按图索骥的。
