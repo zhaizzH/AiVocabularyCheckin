@@ -109,6 +109,9 @@ const AI_TIMEOUT = {
   report: 60000,
 };
 
+/** 应用版本号，关于页展示；与 project.config.json 的版本保持一致。 */
+const APP_VERSION = '1.0.0';
+
 const NICKNAME_MAX_LENGTH = 20;
 const HEATMAP_WEEKS = 12;
 const MASTERY_DAYS = 30;
@@ -127,6 +130,7 @@ module.exports = {
   AVATAR_EMOJI,
   SOURCE_LABEL,
   AI_TIMEOUT,
+  APP_VERSION,
   NICKNAME_MAX_LENGTH,
   HEATMAP_WEEKS,
   MASTERY_DAYS,

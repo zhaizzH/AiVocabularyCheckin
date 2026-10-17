@@ -1,6 +1,61 @@
-<view class="page-wrap">
-  <view class="empty">
-    <view class="empty-title">关于</view>
-    <view class="empty-desc">待实现</view>
+<view class="page-wrap about-page">
+  <view class="app-head">
+    <view class="app-logo">📘</view>
+    <view class="app-name">AI 单词打卡</view>
+    <view class="app-version">版本 {{version}}</view>
   </view>
+
+  <view class="card">
+    <view class="card-title">关于本应用</view>
+    <view class="card-body">
+      AI 单词打卡帮助你按词书学习并记住单词：每天学一组新词、按间隔复习、
+      自动收集错题，并用 AI 生成例句、错题讲解和学习报告。
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{groupText}}">
+    <view class="card-title">项目信息</view>
+    <view class="card-body">{{groupText}}</view>
+  </view>
+
+  <!-- 词库版权：BSD 3-Clause 要求保留版权声明与免责声明 -->
+  <view class="card">
+    <view class="card-title">词库版权</view>
+    <view class="card-body">
+      本应用的词库数据来自开源项目 KyleBing/english-vocabulary，
+      遵循 BSD 3-Clause 许可证发布。
+    </view>
+    <view class="license-block">
+      <view class="license-line">Copyright (c) KyleBing</view>
+      <view class="license-line">Redistribution and use in source and binary forms, with or</view>
+      <view class="license-line">without modification, are permitted provided that the</view>
+      <view class="license-line">following conditions are met:</view>
+      <view class="license-line license-indent">
+        1. Redistributions of source code must retain the above
+        copyright notice, this list of conditions and the following
+        disclaimer.
+      </view>
+      <view class="license-line license-indent">
+        2. Redistributions in binary form must reproduce the above
+        copyright notice, this list of conditions and the following
+        disclaimer in the documentation and/or other materials
+        provided with the distribution.
+      </view>
+      <view class="license-line license-indent">
+        3. Neither the name of the copyright holder nor the names of
+        its contributors may be used to endorse or promote products
+        derived from this software without specific prior written
+        permission.
+      </view>
+      <view class="license-line">
+        THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+        CONTRIBUTORS &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED
+        WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+        WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+        PURPOSE ARE DISCLAIMED.
+      </view>
+    </view>
+  </view>
+
+  <view class="foot">Made with ❤️ for vocabulary learners</view>
 </view>

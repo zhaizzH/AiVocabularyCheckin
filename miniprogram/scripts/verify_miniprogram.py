@@ -275,6 +275,40 @@ def check_stats_empty_logic(res: Result) -> None:
         res.ok("统计空态不使用 masteryRate === 0")
 
 
+def check_about_license(res: Result) -> None:
+    """
+    关于页必须保留版本号与词库版权声明（PRD F10）。
+
+    词库来自 KyleBing/english-vocabulary，BSD 3-Clause 要求
+    在分发物中保留版权声明与免责声明。这行文案很容易在某次
+    「精简界面」时被顺手删掉，而删掉就是许可证违规，肉眼看 diff
+    也未必能发现，所以固化成门禁。
+    """
+    about_wxml = ROOT / "pages" / "about" / "about.wxml"
+    if not about_wxml.exists():
+        res.ok("关于页版权声明（页面未实现，跳过）")
+        return
+    text = read(about_wxml)
+
+    missing = []
+    if "version" not in text:
+        missing.append("版本号占位 {{version}}")
+    if "KyleBing" not in text:
+        missing.append("词库项目名 KyleBing/english-vocabulary")
+    if "BSD" not in text:
+        missing.append("许可证名称 BSD 3-Clause")
+    if "COPYRIGHT HOLDERS" not in text.upper():
+        missing.append("BSD 免责声明原文")
+
+    if missing:
+        res.fail(
+            "关于页含版本号与 BSD 3-Clause 词库版权",
+            "pages/about/about.wxml 缺少：" + "、".join(missing),
+        )
+    else:
+        res.ok("关于页含版本号与 BSD 3-Clause 词库版权")
+
+
 def check_checkin_text(res: Result) -> None:
     """
     打卡文案不得写死日词数 20。
@@ -379,6 +413,7 @@ def main() -> int:
     check_error_code_refs(res)
     check_stats_empty_logic(res)
     check_checkin_text(res)
+    check_about_license(res)
 
     for name in res.checks:
         print(f"  ✓ {name}")

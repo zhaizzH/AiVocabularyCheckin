@@ -1,1 +1,84 @@
-/* 关于 页专属样式（S1 暂无） */
+/* 关于页专属样式 */
+
+.about-page {
+  padding-top: 12rpx;
+}
+
+.app-head {
+  text-align: center;
+  padding: 40rpx 0 44rpx;
+}
+
+.app-logo {
+  width: 140rpx;
+  height: 140rpx;
+  margin: 0 auto;
+  border-radius: 32rpx;
+  background: #eef1fe;
+  font-size: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-name {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #333333;
+  margin-top: 24rpx;
+}
+
+.app-version {
+  font-size: 24rpx;
+  color: #999999;
+  margin-top: 8rpx;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 28rpx;
+  margin-bottom: 20rpx;
+}
+
+.card-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333333;
+  margin-bottom: 14rpx;
+}
+
+.card-body {
+  font-size: 26rpx;
+  color: #666666;
+  line-height: 1.8;
+}
+
+/* ---------- 许可证原文 ---------- */
+
+.license-block {
+  margin-top: 20rpx;
+  padding: 20rpx;
+  background: #fafafa;
+  border-radius: 12rpx;
+}
+
+.license-line {
+  font-size: 20rpx;
+  color: #999999;
+  line-height: 1.7;
+  /* 许可证原文是英文长句，强制换行避免横向溢出 */
+  word-break: break-word;
+}
+
+.license-indent {
+  padding-left: 20rpx;
+  margin: 8rpx 0;
+}
+
+.foot {
+  text-align: center;
+  font-size: 22rpx;
+  color: #cccccc;
+  padding: 32rpx 0 48rpx;
+}

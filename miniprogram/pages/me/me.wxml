@@ -1,6 +1,94 @@
-<view class="page-wrap">
-  <view class="empty">
-    <view class="empty-title">我的</view>
-    <view class="empty-desc">待实现</view>
+<view class="page-wrap me-page">
+  <view class="skeleton-wrap" wx:if="{{loading}}">
+    <view class="sk-card"></view>
+    <view class="sk-list"></view>
+  </view>
+
+  <block wx:else>
+    <!-- ---------- 用户卡 ---------- -->
+    <view class="user-card">
+      <view class="avatar-wrap" bindtap="onOpenAvatarSheet">
+        <view class="avatar">{{avatarEmoji}}</view>
+        <view class="avatar-edit">换</view>
+      </view>
+
+      <view class="user-info">
+        <view class="nickname-row" wx:if="{{!editingNickname}}">
+          <text class="nickname">{{profile.nickname || '未设置昵称'}}</text>
+          <text class="edit-hint" bindtap="onEditNickname">修改</text>
+        </view>
+
+        <view class="nickname-edit" wx:else>
+          <input
+            class="nickname-input"
+            value="{{nicknameDraft}}"
+            maxlength="{{nicknameMax}}"
+            placeholder="输入昵称"
+            focus="{{true}}"
+            bindinput="onNicknameInput"
+            confirm-type="done"
+            bindconfirm="onSaveNickname"
+          />
+          <view class="edit-btns">
+            <text class="edit-cancel" bindtap="onCancelNickname">取消</text>
+            <text
+              class="edit-save {{savingNickname ? 'edit-save-busy' : ''}}"
+              bindtap="onSaveNickname"
+            >保存</text>
+          </view>
+        </view>
+
+        <view class="username">@{{profile.username}}</view>
+        <view class="join-info">
+          <text wx:if="{{registerDate}}">{{registerDate}} 加入</text>
+          <text class="join-sep" wx:if="{{registerDate}}">·</text>
+          <text>累计打卡 {{profile.totalCheckInDays || 0}} 天</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- ---------- 功能列表 ---------- -->
+    <view class="menu-group">
+      <view class="menu-item" bindtap="onOpenBooks">
+        <text class="menu-icon">📚</text>
+        <text class="menu-label">我的词书管理</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" bindtap="onOpenAvatarSheet">
+        <text class="menu-icon">🙂</text>
+        <text class="menu-label">更换头像</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" bindtap="onOpenReport">
+        <text class="menu-icon">🤖</text>
+        <text class="menu-label">AI 学习报告</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item menu-item-last" bindtap="onOpenAbout">
+        <text class="menu-icon">ℹ️</text>
+        <text class="menu-label">关于</text>
+        <text class="menu-arrow">›</text>
+      </view>
+    </view>
+
+    <!-- ---------- 退出登录：red 描边 ---------- -->
+    <view class="btn-logout" bindtap="onLogout">退出登录</view>
+  </block>
+
+  <!-- ---------- 头像选择弹层 ---------- -->
+  <view class="sheet-mask" wx:if="{{avatarSheetVisible}}" bindtap="onCloseAvatarSheet">
+    <view class="sheet" catchtap="noop">
+      <view class="sheet-title">选择头像</view>
+      <view class="avatar-grid">
+        <view
+          class="avatar-option {{item.key === currentAvatar ? 'avatar-option-active' : ''}}"
+          wx:for="{{avatarOptions}}"
+          wx:key="key"
+          data-key="{{item.key}}"
+          bindtap="onPickAvatar"
+        >{{item.emoji}}</view>
+      </view>
+      <view class="sheet-cancel" bindtap="onCloseAvatarSheet">取消</view>
+    </view>
   </view>
 </view>

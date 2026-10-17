@@ -1848,6 +1848,200 @@ async function main() {
     });
   }
 
+  // ============================================================ 我的（F10）
+  group('我的（pages/me）用户卡、头像、昵称、退出登录');
+  {
+    const mock = createWxMock();
+    const m = freshModules(mock);
+
+    const uname = 'me_' + Math.random().toString(36).slice(2, 10);
+    await m.auth.register({ username: uname, password: 'Test123456', nickname: '初始昵称' });
+    const login = await m.auth.login({ username: uname, password: 'Test123456' });
+    m.storage.setToken(login.token);
+    mock.app.globalData.token = login.token;
+
+    await test('加载个人资料并派生头像 emoji 与注册日期', async () => {
+      const page = loadPage('pages/me/me.js', mock);
+      page.onLoad();
+      await page.loadProfile();
+
+      assert.ok(page.data.profile, '应拿到 profile');
+      assert.strictEqual(page.data.profile.username, uname);
+      assert.strictEqual(page.data.profile.nickname, '初始昵称');
+      assert.ok(page.data.avatarEmoji, '头像应映射为 emoji');
+      assert.strictEqual(page.data.registerDate.length, 10, '注册日期应为 YYYY-MM-DD');
+      assert.strictEqual(page.data.loading, false);
+    });
+
+    await test('头像选项为 6 个且都带 emoji', () => {
+      const page = loadPage('pages/me/me.js', mock);
+      page.onLoad();
+      assert.strictEqual(page.data.avatarOptions.length, 6, 'PRD 要求 6 选 1');
+      page.data.avatarOptions.forEach(function (o) {
+        assert.ok(o.key, '每个选项应有 key');
+        assert.ok(o.emoji, '每个选项应有 emoji');
+      });
+      // 6 个不重复
+      const keys = page.data.avatarOptions.map(function (o) { return o.key; });
+      assert.strictEqual(new Set(keys).size, 6, '头像 key 不应重复');
+    });
+
+    await test('选新头像后本地与后端都更新', async () => {
+      const page = loadPage('pages/me/me.js', mock);
+      page.onLoad();
+      await page.loadProfile();
+      const before = page.data.profile.avatar;
+
+      await page.onPickAvatar({ currentTarget: { dataset: { key: 'avatar_3' } } });
+
+      assert.strictEqual(page.data.profile.avatar, 'avatar_3');
+      assert.strictEqual(page.data.avatarEmoji, '🔥', 'avatar_3 应映射为 🔥');
+      assert.strictEqual(page.data.avatarSheetVisible, false, '选完应关闭弹层');
+      assert.notStrictEqual(before, 'avatar_3', '前置状态不该已是 avatar_3');
+
+      const after = await m.auth.getProfile();
+      assert.strictEqual(after.avatar, 'avatar_3', '后端应已保存');
+    });
+
+    await test('选同一个头像不发请求（避免无谓写库）', async () => {
+      const page = loadPage('pages/me/me.js', mock);
+      page.onLoad();
+      await page.loadProfile();
+
+      const reqBefore = mock.log.requests.length;
+      mock.log.toasts.length = 0;
+      await page.onPickAvatar({
+        currentTarget: { dataset: { key: page.data.profile.avatar } },
+      });
+
+      assert.strictEqual(mock.log.requests.length, reqBefore, '不该发请求');
+      assert.strictEqual(mock.log.toasts.length, 0, '不该弹提示');
+      assert.strictEqual(page.data.avatarSheetVisible, false, '仍应关闭弹层');
+    });
+
+    await test('昵称为空不发请求并提示', async () => {
+      const page = loadPage('pages/me/me.js', mock);
+      page.onLoad();
+      await page.loadProfile();
+
+      const reqBefore = mock.log.requests.length;
+      mock.log.toasts.length = 0;
+      page.onEditNickname();
+      page.onNicknameInput({ detail: { value: '   ' } });
+      await page.onSaveNickname();
+
+      assert.strictEqual(mock.log.requests.length, reqBefore, '空昵称不该发请求');
+      assert.strictEqual(mock.log.toasts.length, 1);
+      assert.ok(mock.log.toasts[0].title.indexOf('不能为空') >= 0,
+        mock.log.toasts[0].title);
+      assert.strictEqual(page.data.editingNickname, true, '失败时应保持编辑态');
+    });
+
+    await test('昵称超过 20 字不发请求并提示上限', async () => {
+      const page = loadPage('pages/me/me.js', mock);
+      page.onLoad();
+      await page.loadProfile();
+
+      const reqBefore = mock.log.requests.length;
+      mock.log.toasts.length = 0;
+      page.onEditNickname();
+      page.onNicknameInput({ detail: { value: 'a'.repeat(21) } });
+      await page.onSaveNickname();
+
+      assert.strictEqual(mock.log.requests.length, reqBefore, '超长不该发请求');
+      assert.ok(mock.log.toasts[0].title.indexOf('20') >= 0, mock.log.toasts[0].title);
+    });
+
+    await test('昵称 20 字边界可保存（不能 off-by-one）', async () => {
+      const page = loadPage('pages/me/me.js', mock);
+      page.onLoad();
+      await page.loadProfile();
+
+      const exact = '二'.repeat(20);
+      page.onEditNickname();
+      page.onNicknameInput({ detail: { value: exact } });
+      await page.onSaveNickname();
+
+      assert.strictEqual(page.data.profile.nickname, exact, '20 字应允许');
+      assert.strictEqual(page.data.editingNickname, false, '保存后收起编辑态');
+      const after = await m.auth.getProfile();
+      assert.strictEqual(after.nickname, exact, '后端应已保存');
+    });
+
+    await test('昵称无改动不发请求直接收起', async () => {
+      const page = loadPage('pages/me/me.js', mock);
+      page.onLoad();
+      await page.loadProfile();
+
+      const reqBefore = mock.log.requests.length;
+      page.onEditNickname();
+      page.onNicknameInput({ detail: { value: page.data.profile.nickname } });
+      await page.onSaveNickname();
+
+      assert.strictEqual(mock.log.requests.length, reqBefore, '无改动不该发请求');
+      assert.strictEqual(page.data.editingNickname, false);
+    });
+
+    await test('三个功能入口 navigateTo 到正确页面', () => {
+      const page = loadPage('pages/me/me.js', mock);
+      mock.log.navTo = mock.log.navTo || [];
+      const urls = [];
+      const origNav = mock.wx.navigateTo;
+      mock.wx.navigateTo = function (opts) { urls.push(opts.url); };
+      try {
+        page.onOpenBooks();
+        page.onOpenReport();
+        page.onOpenAbout();
+      } finally {
+        mock.wx.navigateTo = origNav;
+      }
+      assert.deepStrictEqual(urls, [
+        '/pages/books/books',
+        '/pages/report/report',
+        '/pages/about/about',
+      ]);
+    });
+
+    await test('退出登录取消时不清 token、不跳转', async () => {
+      const page = loadPage('pages/me/me.js', mock);
+      mock.log.relaunch.length = 0;
+      mock.wx.showModal = function (opts) {
+        if (opts.success) opts.success({ confirm: false, cancel: true });
+      };
+      page.onLogout();
+      assert.ok(m.storage.getToken(), '取消后 token 必须保留');
+      assert.strictEqual(mock.log.relaunch.length, 0, '取消不该跳登录');
+    });
+
+    await test('退出登录确认后清 token/globalData 并 reLaunch 到登录页', async () => {
+      const page = loadPage('pages/me/me.js', mock);
+      mock.log.relaunch.length = 0;
+      mock.wx.showModal = function (opts) {
+        if (opts.success) opts.success({ confirm: true });
+      };
+      page.onLogout();
+
+      assert.strictEqual(m.storage.getToken(), '', 'token 应清空');
+      assert.strictEqual(mock.app.globalData.token, '', 'globalData.token 应清空');
+      assert.strictEqual(mock.log.relaunch.length, 1);
+      assert.strictEqual(mock.log.relaunch[0].url, '/pages/login/login');
+    });
+  }
+
+  // ============================================================ 关于（F10）
+  group('关于（pages/about）版本号与词库版权');
+  {
+    const mock = createWxMock();
+    freshModules(mock);
+
+    await test('显示版本号', () => {
+      const page = loadPage('pages/about/about.js', mock);
+      assert.ok(page.data.version, '应有版本号');
+      assert.ok(/^\d+\.\d+\.\d+$/.test(page.data.version),
+        '版本号格式应为 x.y.z，实际 ' + page.data.version);
+    });
+  }
+
   // ============================================================ 完整性
   group('全部 wx.request 均经 request.js 发出');
   {
