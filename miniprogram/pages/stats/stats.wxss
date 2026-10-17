@@ -1,1 +1,194 @@
-/* 统计 页专属样式（S1 暂无） */
+/* 统计页专属样式 */
+
+.stats-page {
+  padding-top: 12rpx;
+}
+
+/* ---------- 骨架屏 ---------- */
+
+.sk-block {
+  border-radius: 24rpx;
+  background: #eef0f5;
+  animation: sk-pulse 1.2s ease-in-out infinite;
+}
+
+.sk-heat {
+  height: 340rpx;
+  margin-bottom: 20rpx;
+}
+
+.sk-chart {
+  height: 480rpx;
+}
+
+@keyframes sk-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.empty-btn {
+  display: inline-flex;
+  padding: 0 56rpx;
+}
+
+/* ---------- 卡片 ---------- */
+
+.card {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 28rpx;
+  margin-bottom: 20rpx;
+}
+
+.card-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #333333;
+}
+
+.card-sub {
+  font-size: 22rpx;
+  color: #999999;
+  margin-top: 6rpx;
+  margin-bottom: 24rpx;
+}
+
+/* ---------- 热力图 ---------- */
+
+.heat-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 8rpx;
+}
+
+.weekday-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  padding-top: 2rpx;
+  flex-shrink: 0;
+}
+
+.weekday-label {
+  height: 24rpx;
+  line-height: 24rpx;
+  font-size: 18rpx;
+  color: #bbbbbb;
+  width: 24rpx;
+  text-align: center;
+}
+
+.heat-scroll {
+  flex: 1;
+  min-width: 0;
+}
+
+.heat-inner {
+  display: inline-block;
+}
+
+.heat-grid {
+  display: grid;
+  grid-template-rows: repeat(7, 24rpx);
+  grid-auto-flow: column;
+  gap: 6rpx;
+}
+
+.cell {
+  width: 24rpx;
+  height: 24rpx;
+  border-radius: 5rpx;
+  box-sizing: border-box;
+}
+
+/* 4 档色阶：level 由后端算好（0 未学 / 1:1–10 / 2:11–20 / 3:21+），
+   前端只做颜色映射，绝不按 wordCount 重新分档。 */
+.level-0 { background: #f0f1f5; }
+.level-1 { background: #d6e0fd; }
+.level-2 { background: #8fa8f9; }
+.level-3 { background: #4a6cf7; }
+
+.cell-placeholder {
+  background: transparent;
+}
+
+/* 列宽必须与 .heat-grid 完全一致（24rpx 格 + 6rpx gap），
+   否则月份标注会逐列偏离，最后几列对不上自己的色块。 */
+.heat-months {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 24rpx;
+  gap: 6rpx;
+  margin-top: 10rpx;
+}
+
+.month-mark {
+  font-size: 18rpx;
+  color: #bbbbbb;
+  white-space: nowrap;
+}
+
+.heat-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8rpx;
+  margin-top: 20rpx;
+}
+
+.legend-text {
+  font-size: 20rpx;
+  color: #bbbbbb;
+}
+
+/* ---------- 折线图 ---------- */
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28rpx;
+  margin-bottom: 16rpx;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.legend-line {
+  width: 32rpx;
+  height: 2rpx;
+}
+
+.line-solid {
+  background: #4a6cf7;
+}
+
+.line-dash {
+  /* 用 repeating-linear-gradient 画虚线段，避免多引一个图片 */
+  background: repeating-linear-gradient(
+    to right,
+    #fa8c16 0,
+    #fa8c16 6rpx,
+    transparent 6rpx,
+    transparent 10rpx
+  );
+}
+
+.legend-label {
+  font-size: 22rpx;
+  color: #666666;
+}
+
+.mastery-chart {
+  width: 100%;
+  height: 400rpx;
+}
+
+.chart-hint {
+  font-size: 20rpx;
+  color: #bbbbbb;
+  text-align: center;
+  margin-top: 8rpx;
+}

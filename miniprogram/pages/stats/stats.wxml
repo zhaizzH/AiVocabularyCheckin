@@ -1,6 +1,89 @@
-<view class="page-wrap">
-  <view class="empty">
-    <view class="empty-title">统计</view>
-    <view class="empty-desc">待实现</view>
+<view class="page-wrap stats-page">
+  <view class="skeleton-wrap" wx:if="{{loading}}">
+    <view class="sk-block sk-heat"></view>
+    <view class="sk-block sk-chart"></view>
   </view>
+
+  <view class="empty" wx:elif="{{errorMsg}}">
+    <view class="empty-icon">😵</view>
+    <view class="empty-title">加载失败</view>
+    <view class="empty-desc">{{errorMsg}}</view>
+    <view class="btn btn-primary empty-btn" bindtap="onRetry">重试</view>
+  </view>
+
+  <view class="empty" wx:elif="{{isEmpty}}">
+    <view class="empty-icon">📈</view>
+    <view class="empty-title">还没有数据</view>
+    <view class="empty-desc">开始第一次学习后，这里会长出你的数据</view>
+    <view class="btn btn-primary empty-btn" bindtap="goStudy">去学习</view>
+  </view>
+
+  <block wx:else>
+    <!-- ---------- 打卡热力图 ---------- -->
+    <view class="card">
+      <view class="card-title">打卡记录</view>
+      <view class="card-sub">最近 12 周</view>
+
+      <view class="heat-body">
+        <view class="weekday-col">
+          <view class="weekday-label" wx:for="{{weekdayLabels}}" wx:key="*this">{{item}}</view>
+        </view>
+
+        <scroll-view class="heat-scroll" scroll-x="{{true}}" enable-flex="true">
+          <view class="heat-inner">
+            <!-- grid-auto-flow: column + 7 行 ⇒ 扁平数组按列自动填充 -->
+            <view class="heat-grid">
+              <block wx:for="{{cells}}" wx:key="index">
+                <view
+                  wx:if="{{item}}"
+                  class="cell level-{{item.level}}"
+                  data-date="{{item.date}}"
+                  data-count="{{item.wordCount}}"
+                  bindtap="onTapCell"
+                ></view>
+                <view wx:else class="cell cell-placeholder"></view>
+              </block>
+            </view>
+
+            <view class="heat-months">
+              <view class="month-mark" wx:for="{{heatmapMonths}}" wx:key="index">{{item}}</view>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+
+      <view class="heat-legend">
+        <text class="legend-text">少</text>
+        <view class="cell level-0"></view>
+        <view class="cell level-1"></view>
+        <view class="cell level-2"></view>
+        <view class="cell level-3"></view>
+        <text class="legend-text">多</text>
+      </view>
+    </view>
+
+    <!-- ---------- 掌握度曲线 ---------- -->
+    <view class="card">
+      <view class="card-title">掌握度趋势</view>
+      <view class="card-sub">最近 30 天</view>
+
+      <view class="chart-legend">
+        <view class="legend-item">
+          <view class="legend-line line-solid"></view>
+          <text class="legend-label">掌握度 {{masterySummary}}%</text>
+        </view>
+        <view class="legend-item">
+          <view class="legend-line line-dash"></view>
+          <text class="legend-label">每日错题 {{mistakeSummary}} 个</text>
+        </view>
+      </view>
+
+      <canvas
+        type="2d"
+        id="masteryChart"
+        class="mastery-chart"
+      ></canvas>
+      <view class="chart-hint">左轴：掌握度 %　右轴：错题数</view>
+    </view>
+  </block>
 </view>

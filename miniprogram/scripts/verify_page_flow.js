@@ -48,11 +48,48 @@ async function test(name, fn) {
 
 // ---------------------------------------------------------------- wx 运行时模拟
 
+/** 记录 canvas 2d 上下文的所有调用，供断言检查「画了什么」。 */
+function createCanvasRecorder() {
+  const calls = [];
+  function rec(fn) {
+    return function () {
+      calls.push({ fn, args: Array.prototype.slice.call(arguments) });
+    };
+  }
+  const ctx = {
+    scale: rec('scale'),
+    clearRect: rec('clearRect'),
+    beginPath: rec('beginPath'),
+    moveTo: rec('moveTo'),
+    lineTo: rec('lineTo'),
+    stroke: rec('stroke'),
+    fill: rec('fill'),
+    arc: rec('arc'),
+    fillText: rec('fillText'),
+    setLineDash: rec('setLineDash'),
+  };
+  // 样式属性也用 setter 录制，便于断言「确实换了颜色/线宽」
+  ['strokeStyle', 'fillStyle', 'lineWidth', 'font', 'textAlign',
+    'textBaseline', 'lineJoin'].forEach((prop) => {
+    Object.defineProperty(ctx, prop, {
+      set(value) { calls.push({ fn: prop, args: [value] }); },
+      get() { return undefined; },
+    });
+  });
+  const node = {
+    width: 0,
+    height: 0,
+    getContext() { return ctx; },
+  };
+  return { node, calls };
+}
+
 /** Storage 用进程内对象模拟，和真机一样按 key 存字符串。 */
 function createWxMock() {
   const storage = new Map();
   const log = { toasts: [], relaunch: [], switchTab: [], redirectTo: [], requests: [] };
   let requestOverride = null;
+  const canvas = createCanvasRecorder();
 
   function realRequest(opts) {
     const url = new URL(opts.url);
@@ -143,12 +180,36 @@ function createWxMock() {
       }
       realRequest(opts);
     },
+    getSystemInfoSync() {
+      return { pixelRatio: 2, windowWidth: 375, windowHeight: 667 };
+    },
+    nextTick(fn) {
+      setTimeout(fn, 0);
+    },
+    // 小程序 Canvas 2d 通过 SelectorQuery 拿节点；这里直接返回录制好的假节点，
+    // 使手绘逻辑能在 Node 里跑完并被断言。
+    createSelectorQuery() {
+      return {
+        select() {
+          return {
+            fields() {
+              return {
+                exec(cb) {
+                  cb([{ node: canvas.node, width: 330, height: 200 }]);
+                },
+              };
+            },
+          };
+        },
+      };
+    },
   };
 
   return {
     wx,
     log,
     storage,
+    canvas,
     setRequestOverride(fn) {
       requestOverride = fn;
     },
@@ -1608,6 +1669,178 @@ async function main() {
 
     await test('「去学习」用 switchTab（tab 页）', () => {
       const page = loadPage('pages/report/report.js', mock);
+      mock.log.switchTab.length = 0;
+      page.goStudy();
+      assert.strictEqual(mock.log.switchTab.length, 1);
+      assert.strictEqual(mock.log.switchTab[0].url, '/pages/study/study');
+    });
+  }
+
+  // ============================================================ 统计（F9）
+  group('数据统计（pages/stats）热力图、canvas 折线、空态');
+  {
+    const mock = createWxMock();
+    const m = freshModules(mock);
+
+    const uname = 'st_' + Math.random().toString(36).slice(2, 10);
+    await m.auth.register({ username: uname, password: 'Test123456' });
+    const login = await m.auth.login({ username: uname, password: 'Test123456' });
+    m.storage.setToken(login.token);
+    const books = await m.book.listBooks('');
+    await m.book.selectBook(books[0].bookId);
+
+    await test('空账号判定为空态（不能拿 masteryRate=100 判空）', async () => {
+      const page = loadPage('pages/stats/stats.js', mock);
+      await page.loadAll();
+      assert.strictEqual(page.data.isEmpty, true,
+        '实际 isEmpty=' + page.data.isEmpty);
+      assert.strictEqual(page.data.errorMsg, '', '空态不是错误');
+      assert.strictEqual(page.data.loading, false);
+    });
+
+    await test('热力图 84 格且能被 7 整除（占位补齐）', async () => {
+      const page = loadPage('pages/stats/stats.js', mock);
+      await page.loadAll();
+      const cells = page.data.cells;
+      assert.ok(cells.length > 0, '应有格子');
+      assert.strictEqual(cells.length % 7, 0,
+        '格数 ' + cells.length + ' 必须能被 7 整除，否则最后一列错位');
+      assert.strictEqual(cells.length, 84, '12 周应为 84 格');
+    });
+
+    await test('月份标注数量与列数一致', async () => {
+      const page = loadPage('pages/stats/stats.js', mock);
+      await page.loadAll();
+      assert.strictEqual(page.data.heatmapMonths.length,
+        page.data.cells.length / 7,
+        '月份标注必须每列一个，否则与色块对不齐');
+    });
+
+    await test('点非空格子弹当日词数 toast，点占位格无反应', async () => {
+      const page = loadPage('pages/stats/stats.js', mock);
+      await page.loadAll();
+
+      mock.log.toasts.length = 0;
+      page.onTapCell({ currentTarget: { dataset: { date: '2026-10-17', count: 12 } } });
+      assert.strictEqual(mock.log.toasts.length, 1, '应弹一次 toast');
+      assert.ok(mock.log.toasts[0].title.indexOf('12') >= 0,
+        'toast 应含词数：' + mock.log.toasts[0].title);
+
+      // 占位格（补齐首尾的 null）没有 date，必须静默忽略
+      mock.log.toasts.length = 0;
+      page.onTapCell({ currentTarget: { dataset: {} } });
+      assert.strictEqual(mock.log.toasts.length, 0, '占位格不应弹 toast');
+    });
+
+    await test('未学习日期的格子提示「未学习」而非「学习 0 词」', async () => {
+      const page = loadPage('pages/stats/stats.js', mock);
+      mock.log.toasts.length = 0;
+      page.onTapCell({ currentTarget: { dataset: { date: '2026-10-01', count: 0 } } });
+      assert.ok(mock.log.toasts[0].title.indexOf('未学习') >= 0,
+        mock.log.toasts[0].title);
+    });
+
+    await test('空态时绝不调用 canvas（避免画出空网格）', async () => {
+      const page = loadPage('pages/stats/stats.js', mock);
+      mock.canvas.calls.length = 0;
+      await page.loadAll();
+      await new Promise(function (r) { setTimeout(r, 200); });
+      assert.strictEqual(mock.canvas.calls.length, 0,
+        '空数据不应绘制，实际调用 ' + mock.canvas.calls.length + ' 次');
+    });
+
+    await test('有数据时手绘折线：含 lineTo 与末点 arc，且虚线已复位', async () => {
+      // 造一点学习数据
+      const plan = await m.study.getPlan();
+      for (let i = 0; i < 3; i++) {
+        await m.study.recordStudy({
+          wordId: plan.words[i].wordId,
+          bookId: plan.words[i].bookId,
+          known: i !== 2,
+        });
+      }
+
+      const page = loadPage('pages/stats/stats.js', mock);
+      mock.canvas.calls.length = 0;
+      await page.loadAll();
+      await new Promise(function (r) { setTimeout(r, 300); });
+
+      const fns = mock.canvas.calls.map(function (c) { return c.fn; });
+      assert.ok(fns.length > 20, '应有大量绘制调用，实际 ' + fns.length);
+      assert.ok(fns.indexOf('lineTo') >= 0, '应画折线');
+      assert.ok(fns.indexOf('clearRect') >= 0, '应先清空画布');
+      assert.ok(fns.indexOf('scale') >= 0, '应做 dpr 缩放');
+
+      // 两条线：一条实线一条虚线
+      const dashCalls = mock.canvas.calls.filter(function (c) {
+        return c.fn === 'setLineDash' && c.args[0] && c.args[0].length > 0;
+      });
+      assert.strictEqual(dashCalls.length, 1, '第二条折线应设置虚线');
+      const resetCalls = mock.canvas.calls.filter(function (c) {
+        return c.fn === 'setLineDash' && c.args[0] && c.args[0].length === 0;
+      });
+      assert.ok(resetCalls.length >= 1, '虚线状态必须复位');
+
+      // 末点圆点只有一个（且出现在复位之后）
+      const arcs = mock.canvas.calls.filter(function (c) { return c.fn === 'arc'; });
+      assert.strictEqual(arcs.length, 1, '末点应有且只有一个圆点');
+
+      const lastDashIdx = mock.canvas.calls.map(function (c, i) {
+        return c.fn === 'setLineDash' ? i : -1;
+      }).filter(function (i) { return i >= 0; }).pop();
+      const arcIdx = mock.canvas.calls.map(function (c, i) {
+        return c.fn === 'arc' ? i : -1;
+      }).filter(function (i) { return i >= 0; })[0];
+      assert.ok(arcIdx > lastDashIdx, '末点圆点必须在虚线复位之后绘制');
+    });
+
+    await test('有数据时非空态且摘要数字来自后端', async () => {
+      const page = loadPage('pages/stats/stats.js', mock);
+      await page.loadAll();
+      assert.strictEqual(page.data.isEmpty, false);
+      assert.ok(page.data.masterySummary !== '', '应有掌握度摘要');
+      assert.ok(page.data.mistakeSummary !== '', '应有错题摘要');
+    });
+
+    await test('两接口全失败才报错，单接口失败仍展示另一半', async () => {
+      const page = loadPage('pages/stats/stats.js', mock);
+      const origReq = mock.wx.request;
+      // 只让 mastery 失败
+      mock.wx.request = function (opts) {
+        if (opts.url.indexOf('/stats/mastery') >= 0) {
+          opts.fail({ errMsg: 'request:fail timeout' });
+          return;
+        }
+        origReq.call(mock.wx, opts);
+      };
+      try {
+        await page.loadAll();
+        assert.strictEqual(page.data.errorMsg, '',
+          '单接口失败不应整页报错，实际 ' + page.data.errorMsg);
+        assert.ok(page.data.cells.length > 0, '热力图仍应展示');
+      } finally {
+        mock.wx.request = origReq;
+      }
+
+      // 两个都失败
+      mock.wx.request = function (opts) {
+        if (opts.url.indexOf('/stats/') >= 0) {
+          opts.fail({ errMsg: 'request:fail timeout' });
+          return;
+        }
+        origReq.call(mock.wx, opts);
+      };
+      try {
+        await page.loadAll();
+        assert.ok(page.data.errorMsg, '全失败应报错');
+        assert.strictEqual(page.data.loading, false);
+      } finally {
+        mock.wx.request = origReq;
+      }
+    });
+
+    await test('「去学习」用 switchTab（tab 页）', () => {
+      const page = loadPage('pages/stats/stats.js', mock);
       mock.log.switchTab.length = 0;
       page.goStudy();
       assert.strictEqual(mock.log.switchTab.length, 1);
