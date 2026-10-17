@@ -634,6 +634,206 @@ async function main() {
     });
   }
 
+  // ============================================================ 首页（F2）
+  group('首页（pages/index）三卡并行与隔离');
+  {
+    const mock = createWxMock();
+    const m = freshModules(mock);
+
+    // 真实后端：先选中一本词书，让 plan.total > 0，才能验证「不写死 20」
+    const uname = 'home_' + Math.random().toString(36).slice(2, 10);
+    await m.auth.register({ username: uname, password: 'Test123456' });
+    const login = await m.auth.login({ username: uname, password: 'Test123456' });
+    m.storage.setToken(login.token);
+    m.storage.setUserInfo(login.userInfo);
+    const books = await m.book.listBooks('');
+    await m.book.selectBook(books[0].bookId);
+
+    await test('三卡数据成功时全部渲染，plan.total 来自后端而非写死', async () => {
+      const page = loadPage('pages/index/index.js', mock);
+      await page.refresh();
+
+      assert.strictEqual(page.data.loading, false);
+      assert.ok(page.data.plan, 'plan 应有值');
+      assert.ok(!page.data.planError, 'plan 不应有错误: ' + page.data.planError);
+      assert.ok(!page.data.reviewError, 'review 不应有错误: ' + page.data.reviewError);
+      assert.ok(!page.data.streakError, 'streak 不应有错误: ' + page.data.streakError);
+      assert.ok(page.data.plan.total > 0, 'total 应 > 0，实际 ' + page.data.plan.total);
+      assert.ok(page.data.streak, 'streak 应有值');
+    });
+
+    await test('review 接口失败时 plan 卡仍正常显示（allSettled 隔离）', async () => {
+      const page = loadPage('pages/index/index.js', mock);
+      const origReq = mock.wx.request;
+      mock.wx.request = function (opts) {
+        if (opts.url.indexOf('/review/today') >= 0) {
+          opts.fail({ errMsg: 'request:fail timeout' });
+          return;
+        }
+        origReq.call(mock.wx, opts);
+      };
+      try {
+        await page.refresh();
+        assert.ok(page.data.reviewError, '复习卡应显示错误');
+        assert.strictEqual(page.data.reviewTotal, 0);
+        // 关键：另外两张卡不受影响
+        assert.ok(page.data.plan, 'plan 卡不应因 review 失败而清空');
+        assert.ok(!page.data.planError, 'plan 卡不应有错误: ' + page.data.planError);
+        assert.ok(page.data.streak, 'streak 卡不应受影响');
+      } finally {
+        mock.wx.request = origReq;
+      }
+    });
+
+    await test('三卡全部失败时都不崩，各卡独立显示错误', async () => {
+      const page = loadPage('pages/index/index.js', mock);
+      const origReq = mock.wx.request;
+      mock.wx.request = function (opts) {
+        opts.fail({ errMsg: 'request:fail net::ERR_INTERNET_DISCONNECTED' });
+      };
+      try {
+        await page.refresh();
+        assert.strictEqual(page.data.plan, null);
+        assert.ok(page.data.planError);
+        assert.ok(page.data.reviewError);
+        assert.ok(page.data.streakError);
+        assert.strictEqual(page.data.loading, false, 'loading 必须复位');
+      } finally {
+        mock.wx.request = origReq;
+      }
+    });
+
+    await test('问候语按时段变化且不为空', async () => {
+      const page = loadPage('pages/index/index.js', mock);
+      await page.refresh();
+      assert.ok(
+        ['早上好', '下午好', '晚上好'].indexOf(page.data.greeting) >= 0,
+        '实际: ' + page.data.greeting,
+      );
+    });
+
+    await test('卡片跳转用 switchTab（tab 页不能用 navigateTo）', () => {
+      const page = loadPage('pages/index/index.js', mock);
+      mock.log.switchTab.length = 0;
+      page.goStudy();
+      page.goReview();
+      page.goStats();
+      assert.strictEqual(mock.log.switchTab.length, 3);
+      assert.deepStrictEqual(
+        mock.log.switchTab.map(function (o) { return o.url; }),
+        ['/pages/study/study', '/pages/review/review', '/pages/stats/stats'],
+      );
+    });
+  }
+
+  // ============================================================ 词书（F3）
+  group('词书页（pages/books）筛选与加入/移出');
+  {
+    const mock = createWxMock();
+    const m = freshModules(mock);
+
+    const uname = 'bk_' + Math.random().toString(36).slice(2, 10);
+    await m.auth.register({ username: uname, password: 'Test123456' });
+    const login = await m.auth.login({ username: uname, password: 'Test123456' });
+    m.storage.setToken(login.token);
+
+    await test('初始加载返回全部词书并带派生字段', async () => {
+      const page = loadPage('pages/books/books.js', mock);
+      await page.loadBooks();
+      assert.ok(page.data.books.length > 0, '应有词书');
+      const b = page.data.books[0];
+      assert.ok(b.categoryLabel, 'categoryLabel 应已派生');
+      assert.strictEqual(typeof b.progress, 'number', 'progress 应为数字');
+      assert.ok(!Number.isNaN(b.progress), 'progress 不应是 NaN');
+      assert.strictEqual(page.data.loading, false);
+    });
+
+    await test('切换分类只返回该分类词书', async () => {
+      const page = loadPage('pages/books/books.js', mock);
+      await page.loadBooks();
+      page.onSwitchCategory({ currentTarget: { dataset: { value: 'CET4' } } });
+      await new Promise(function (r) { setTimeout(r, 900); });
+      assert.strictEqual(page.data.activeCategory, 'CET4');
+      page.data.books.forEach(function (b) {
+        assert.strictEqual(b.category, 'CET4', '混入了非 CET4: ' + b.name);
+      });
+    });
+
+    await test('加入词书后 selected 变 true 且 pendingBookId 复位', async () => {
+      const page = loadPage('pages/books/books.js', mock);
+      page.setData({ activeCategory: '' });
+      await page.loadBooks();
+      const target = page.data.books.find(function (b) { return !b.selected; })
+        || page.data.books[0];
+
+      mock.wx.showModal = function (opts) { if (opts.success) opts.success({ confirm: true }); };
+      await page.onToggleBook({
+        currentTarget: { dataset: { bookid: target.bookId, selected: target.selected } },
+      });
+
+      await page.loadBooks();
+      const after = page.data.books.find(function (b) { return b.bookId === target.bookId; });
+      assert.ok(after.selected, '应已加入');
+      assert.strictEqual(page.data.pendingBookId, null, 'pendingBookId 应复位');
+    });
+
+    await test('移出词书需二次确认：取消则不发请求且状态不变', async () => {
+      const page = loadPage('pages/books/books.js', mock);
+      page.setData({ activeCategory: '' });
+      await page.loadBooks();
+      const selected = page.data.books.find(function (b) { return b.selected; });
+      assert.ok(selected, '前置条件：应有一本已加入的词书');
+
+      let modalShown = false;
+      mock.wx.showModal = function (opts) {
+        modalShown = true;
+        if (opts.success) opts.success({ confirm: false, cancel: true });
+      };
+
+      const before = mock.log.requests.length;
+      await page.onToggleBook({
+        currentTarget: { dataset: { bookid: selected.bookId, selected: true } },
+      });
+
+      assert.ok(modalShown, '移出必须弹二次确认');
+      assert.strictEqual(mock.log.requests.length, before, '取消后不应发请求');
+
+      await page.loadBooks();
+      const still = page.data.books.find(function (b) { return b.bookId === selected.bookId; });
+      assert.ok(still.selected, '取消后仍应保持已加入');
+    });
+
+    await test('移出词书确认后 selected 变 false', async () => {
+      const page = loadPage('pages/books/books.js', mock);
+      page.setData({ activeCategory: '' });
+      await page.loadBooks();
+      const selected = page.data.books.find(function (b) { return b.selected; });
+      assert.ok(selected);
+
+      mock.wx.showModal = function (opts) { if (opts.success) opts.success({ confirm: true }); };
+      await page.onToggleBook({
+        currentTarget: { dataset: { bookid: selected.bookId, selected: true } },
+      });
+      await page.loadBooks();
+      const after = page.data.books.find(function (b) { return b.bookId === selected.bookId; });
+      assert.strictEqual(after.selected, false);
+    });
+
+    await test('加载失败时清空列表并给出错误文案（不留旧数据）', async () => {
+      const page = loadPage('pages/books/books.js', mock);
+      const origReq = mock.wx.request;
+      mock.wx.request = function (opts) { opts.fail({ errMsg: 'request:fail timeout' }); };
+      try {
+        await page.loadBooks();
+        assert.deepStrictEqual(page.data.books, []);
+        assert.ok(page.data.errorMsg, '应有错误文案');
+        assert.strictEqual(page.data.loading, false);
+      } finally {
+        mock.wx.request = origReq;
+      }
+    });
+  }
+
   // ============================================================ 完整性
   group('全部 wx.request 均经 request.js 发出');
   {

@@ -1,6 +1,120 @@
-<view class="page-wrap">
-  <view class="empty">
-    <view class="empty-title">首页</view>
-    <view class="empty-desc">待实现</view>
+<view class="page-wrap home">
+  <!-- 顶部问候 -->
+  <view class="hero">
+    <view class="hero-hello">{{greeting}}，{{userInfo.nickname || userInfo.username || '同学'}}</view>
+    <view class="hero-sub">坚持每天一点点，词汇量会给你答案</view>
   </view>
+
+  <!-- 骨架屏：三卡同时占位，避免内容跳出导致布局抖动 -->
+  <block wx:if="{{loading}}">
+    <view class="card">
+      <view class="skeleton sk-line sk-line-lg"></view>
+      <view class="skeleton sk-line"></view>
+    </view>
+    <view class="card">
+      <view class="skeleton sk-line sk-line-lg"></view>
+      <view class="skeleton sk-line"></view>
+    </view>
+    <view class="card">
+      <view class="skeleton sk-line sk-line-lg"></view>
+      <view class="skeleton sk-line"></view>
+    </view>
+  </block>
+
+  <block wx:else>
+    <!-- 卡片 1：今日学习计划 -->
+    <view class="card plan-card" bindtap="goStudy">
+      <view class="card-head">
+        <view class="card-title">今日学习</view>
+        <view class="card-more">去学习 ›</view>
+      </view>
+
+      <view class="card-error" wx:if="{{planError}}" catchtap="retryPlan">
+        {{planError}}，点击重试
+      </view>
+
+      <block wx:elif="{{plan}}">
+        <view class="plan-nums">
+          <!-- 分母用 plan.total，绝不写死 20：选了多本词书或含复习词时 total > 20 -->
+          <view class="plan-big">{{plan.finished}}<text class="plan-total">/{{plan.total}}</text></view>
+          <view class="plan-label">今日进度</view>
+        </view>
+
+        <view class="progress-track">
+          <view
+            class="progress-bar"
+            style="width: {{plan.total > 0 ? (plan.finished / plan.total * 100) : 0}}%"
+          ></view>
+        </view>
+
+        <!-- 已打卡 / 还差几个词 / 无计划，三种状态文案不同 -->
+        <view class="plan-tip" wx:if="{{plan.checkedIn}}">今日已打卡，明天继续 💪</view>
+        <view class="plan-tip" wx:elif="{{plan.total === 0}}">还没选词书，先去挑一本吧 ›</view>
+        <view class="plan-tip" wx:else>还差 {{plan.total - plan.finished}} 个词完成今日任务</view>
+      </block>
+    </view>
+
+    <!-- 卡片 2：待复习 -->
+    <view class="card review-card" bindtap="goReview">
+      <view class="card-head">
+        <view class="card-title">今日复习</view>
+        <view class="card-more">去复习 ›</view>
+      </view>
+
+      <view class="card-error" wx:if="{{reviewError}}" catchtap="retryReview">
+        {{reviewError}}，点击重试
+      </view>
+
+      <block wx:else>
+        <view class="review-nums">
+          <view class="review-big">{{reviewTotal}}</view>
+          <view class="review-unit">个待复习</view>
+        </view>
+        <view class="card-hint" wx:if="{{reviewTotal === 0}}">今天没有待复习的单词，休息一下</view>
+        <view class="card-hint" wx:else>按遗忘曲线安排，现在复习效果最好</view>
+      </block>
+    </view>
+
+    <!-- 卡片 3：连续打卡 -->
+    <view class="card streak-card" bindtap="goStats">
+      <view class="card-head">
+        <view class="card-title">连续打卡</view>
+        <view class="card-more">看统计 ›</view>
+      </view>
+
+      <view class="card-error" wx:if="{{streakError}}" catchtap="retryPlan">
+        {{streakError}}
+      </view>
+
+      <block wx:elif="{{streak}}">
+        <view class="streak-row">
+          <view class="streak-item">
+            <view class="streak-num">{{streak.streakDays}}</view>
+            <view class="streak-label">连续天数</view>
+          </view>
+          <view class="streak-sep"></view>
+          <view class="streak-item">
+            <view class="streak-num">{{streak.totalLearned}}</view>
+            <view class="streak-label">累计学词</view>
+          </view>
+        </view>
+      </block>
+    </view>
+
+    <!-- 快捷入口 -->
+    <view class="quick-row">
+      <view class="quick-item" bindtap="goBooks">
+        <view class="quick-icon">📚</view>
+        <view class="quick-text">词书</view>
+      </view>
+      <view class="quick-item" bindtap="goReport">
+        <view class="quick-icon">🤖</view>
+        <view class="quick-text">AI 报告</view>
+      </view>
+      <view class="quick-item" bindtap="goStats">
+        <view class="quick-icon">📊</view>
+        <view class="quick-text">统计</view>
+      </view>
+    </view>
+  </block>
 </view>
