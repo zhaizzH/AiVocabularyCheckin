@@ -126,7 +126,7 @@ tabBar 也受同一限制（`list` 仍需声明 2–5 项）。已与用户确�
 ### 3.1 静态检查（每阶段后执行）
 
 ```bash
-cd /c/workspace/class/AiVocabularyCheckin
+cd <repo-root>
 PYTHONIOENCODING=utf-8 python miniprogram/scripts/verify_miniprogram.py
 ```
 
@@ -144,7 +144,7 @@ PYTHONIOENCODING=utf-8 python miniprogram/scripts/verify_api_flow.py
 
 ```bash
 "/c/software/ide/微信web开发者工具/cli.bat" open \
-  --project "C:\workspace\class\AiVocabularyCheckin\miniprogram"
+  --project "<repo-root>\miniprogram"
 ```
 
 CLI 若因需登录态不可用，退化为人工在 IDE 打开，并在 `research/02-verification.md` 记录原因。
@@ -216,7 +216,7 @@ S1 ──┬─▶ S2 ──▶ S3 ──▶ S4 ──▶ S5
 下面用「先取输出、再判空」的写法，语义明确。
 
 ```bash
-cd /c/workspace/class/AiVocabularyCheckin/miniprogram
+cd <repo-root>/miniprogram
 
 # 1. 页面/组件内不得有裸 wx.request
 out=$(grep -rn "wx\.request" pages/ components/ 2>/dev/null)

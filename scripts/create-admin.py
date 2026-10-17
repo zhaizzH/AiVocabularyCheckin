@@ -18,6 +18,7 @@
 """
 import argparse
 import io
+import os
 import sys
 
 try:
@@ -25,8 +26,11 @@ try:
 except ImportError:
     sys.exit("需要 pymysql：pip install pymysql")
 
-DB = dict(host="127.0.0.1", user="root", password="<REDACTED_DB_PASSWORD>",
-          database="ai_vocab", charset="utf8mb4")
+# 凭据从环境变量读取，禁止硬编码（密码曾经硬编码并泄漏进 Git 历史）。
+DB = dict(host=os.environ.get("DB_HOST", "127.0.0.1"),
+          user=os.environ.get("DB_USERNAME", "root"),
+          password=os.environ.get("DBPASS", os.environ.get("DB_PASSWORD", "")),
+          database=os.environ.get("DB_NAME", "ai_vocab"), charset="utf8mb4")
 
 DEFAULT_USERNAME = "admin"
 DEFAULT_PASSWORD = "Admin@12345"

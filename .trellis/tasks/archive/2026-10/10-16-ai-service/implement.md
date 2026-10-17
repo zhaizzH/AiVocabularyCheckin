@@ -271,7 +271,7 @@ print('OK: /health 无 key 泄露；三路由已在 OpenAPI 中')
 35. [x] 红线自查（**逐条留证据**）：
 
 ```bash
-cd /c/workspace/class/AiVocabularyCheckin
+cd <repo-root>
 # ① 代码层无数据库痕迹（app/ 扫描 + requirements **剔除注释后**扫描）
 grep -rniE "mysql|pymysql|psycopg|sqlalchemy|sqlite|database" ai-service/app \
   && echo "FAIL: app/ 命中数据库词" || echo "OK: app/ 无数据库痕迹"

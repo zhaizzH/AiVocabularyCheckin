@@ -1,7 +1,7 @@
 # HANDOFF — AI 单词学习打卡（四端：后端 / ai-service / 小程序 / 管理端）
 
 > 交接文档 · 最后更新 2026-10-17（HEAD `3009b56`）
-> 仓库根：`C:\workspace\class\AiVocabularyCheckin` · 分支 `main`
+> 仓库根：`AiVocabularyCheckin/` · 分支 `main`
 
 ---
 
@@ -356,7 +356,7 @@ else:
 | MySQL | 8.4.9，`utf8mb4`，InnoDB，含 `ONLY_FULL_GROUP_BY` / `STRICT_TRANS_TABLES` |
 | H2 | 2.3.232（测试库） |
 | 库 | `ai_vocab`（`anime_tracker` 不动） |
-| 连接 | `127.0.0.1:3306` / `root` / 密码 `<REDACTED_DB_PASSWORD>` |
+| 连接 | `127.0.0.1:3306` / `root` / 密码见 `DBPASS` 环境变量（不入仓） |
 | 后端服务 | `http://127.0.0.1:8080` |
 | ai-service 地址 | `http://127.0.0.1:8000`（✅ 已实现，`/health` 返回 `llmConfigured:true`） |
 
@@ -427,12 +427,13 @@ mvn -o -q clean package -DskipTests   # 出 jar → target/vocab-backend-1.0.0.j
 java -jar target/vocab-backend-1.0.0.jar --spring.profiles.active=local
 
 # ── 一键自测（推荐，会自己拉起服务）──
-DBPASS=<REDACTED_DB_PASSWORD> bash backend/scripts/smoke-test.sh
+export DBPASS='<你的 MySQL 密码>'   # 或写入本地 shell profile，绝不写进仓库
+bash backend/scripts/smoke-test.sh
 #   环境变量：DBPASS/DB_PASSWORD(必填)、DB_HOST/DB_PORT/DB_NAME/DB_USERNAME、
 #            BASE(后端地址)、SKIP_UNIT=1(跳过 mvn test)、KEEP_SERVICE=1(不关服务)
 
 # ── 清理冒烟测试遗留数据（独立脚本，刻意不接入 smoke-test.sh）──
-DBPASS=<REDACTED_DB_PASSWORD> python backend/scripts/clean-smoke-data.py [--dry-run]
+DBPASS='<你的 MySQL 密码>' python backend/scripts/clean-smoke-data.py [--dry-run]
 
 # ── 结构校验 ──
 python backend/scripts/verify-schema-entities.py      # 实体 ↔ MySQL DDL 逐列核对
@@ -456,7 +457,7 @@ PYTHONIOENCODING=utf-8 python scripts/verify_degraded_flow.py # 16 项降级（�
 # 若 CLI 报 "IDE service port disabled"，用该参数重启 IDE 一次：
 #   "/c/software/ide/微信web开发者工具/微信开发者工具.exe" --enable-service-port --cli --remote-port 3799
 cd "/c/software/ide/微信web开发者工具"
-./cli.bat preview --project "C:\\workspace\\class\\AiVocabularyCheckin\\miniprogram" --desc "验证"
+./cli.bat preview --project "miniprogram" --desc "验证"
 #   退出码 0 + 末尾有二维码 = 编译通过
 ```
 
@@ -574,7 +575,7 @@ cd frontend && npx tsc -b && npm run build
 cd backend && mvn -o test                    # 预期：326 tests / 0 failures / 0 errors
 
 # ② 一键冒烟（需真 MySQL；脚本自己拉服务，且断言 ai-service 必须停着）
-DBPASS=<REDACTED_DB_PASSWORD> bash backend/scripts/smoke-test.sh   # 预期：exit 0，143 用例 0 FAIL
+DBPASS='<你的 MySQL 密码>' bash backend/scripts/smoke-test.sh   # 预期：exit 0，143 用例 0 FAIL
 
 # ③ 真实数据核对
 #   word_book 3 行（7508 / 5651 / 9602）、word 22761 行

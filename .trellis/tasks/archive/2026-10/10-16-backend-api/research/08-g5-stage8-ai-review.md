@@ -122,8 +122,8 @@
 
 | 敏感值 | 出现次数 |
 |---|---|
-| AppSecret `0245f661…` | 0 |
-| MySQL 密码 `<REDACTED_DB_PASSWORD>` | 0 |
+| AppSecret（微信小程序） | 0 |
+| MySQL 密码 | 0 |
 | AppID `wxc99798ce418b7fce` | 0 |
 | `jwt.secret` 明文 | 0 |
 | 用户明文密码 | 0 |
