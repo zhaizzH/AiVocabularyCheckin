@@ -51,10 +51,16 @@
 
 ## Acceptance Criteria
 
-- [ ] 上表 6 项全部删除，磁盘释放约 380MB
-- [ ] `git status --porcelain` 只剩 R4 列出的 3 类范围外改动
-- [ ] `.gitignore` 覆盖 R2 全部条目，且 `git check-ignore` 逐项验证通过
-- [ ] `backend/scripts/`、`ai-service/scripts/`、`scripts/`、`miniprogram/scripts/` 一个不少
-- [ ] 删除后 `frontend` 与 `backend` 仍能干净重建（`npm install` + `npm run build`、`mvn -o test` 至少编译通过）
-- [ ] `handoff.md` 补一节「清理记录」：删了什么、怎么再生、`.tmp/sess` 内容去向
-- [ ] journal 记录本次会话
+- [x] 上表 6 项全部删除，磁盘 **414M → 35M**（释放 379MB）
+- [x] `git status --porcelain` 只剩 R4 列出的 3 类范围外改动（+ 本任务自身）
+- [x] `.gitignore` 覆盖 R2 全部条目，14 项 `git check-ignore -v` 逐条验证命中
+- [x] `backend/scripts/`(10)、`ai-service/scripts/`(2)、`scripts/`(7)、`miniprogram/scripts/`(10) 一个不少
+- [x] 删除后重建全部通过：`npm install + tsc -b + build` 8.22s、`mvn -o compile` EXIT=0、`pytest` 60 passed/4 skipped、4 套管理端验证 47/27/61/54 全绿
+- [x] `handoff.md` 新增 §9「工作区清理记录」：删了什么、怎么再生、`.tmp/sess` 内容去向、首次 clone 要跑什么
+- [x] journal Session 15 已记录
+
+## 落地记录
+
+提交 `f338e34`。额外收获：删除构建产物后首次在无 `node_modules` 环境下运行
+`verify_admin_frontend.py`，暴露了「npx esbuild 静默失败、stderr 为空、报错无原因」
+的缺陷，已加前置 `node_modules` 检查 + 明确提示。**清理本身也是一次测试。**
