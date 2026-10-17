@@ -39,12 +39,17 @@
     "disableUseStrict": false,
     "minifyWXML": true,
     "showES6CompileOption": false,
-    "useCompilerPlugins": false
+    "useCompilerPlugins": false,
+    "compileWorklet": false,
+    "localPlugins": false,
+    "condition": false
   },
   "compileType": "miniprogram",
   "libVersion": "3.0.0",
   "appid": "wxc99798ce418b7fce",
   "projectname": "AiVocabularyCheckin-miniprogram",
   "miniprogramRoot": "./",
-  "condition": {}
+  "condition": {},
+  "simulatorPluginLibVersion": {},
+  "editorSetting": {}
 }
