@@ -1471,6 +1471,150 @@ async function main() {
     });
   }
 
+  // ============================================================ 报告（F8）
+  group('AI 报告（pages/report）四种终态');
+  {
+    const mock = createWxMock();
+    const m = freshModules(mock);
+
+    const uname = 'rp_' + Math.random().toString(36).slice(2, 10);
+    await m.auth.register({ username: uname, password: 'Test123456' });
+    const login = await m.auth.login({ username: uname, password: 'Test123456' });
+    m.storage.setToken(login.token);
+
+    await test('新账号（打卡 0 天）进入「数据不足」而非错误态', async () => {
+      const page = loadPage('pages/report/report.js', mock);
+      await page.loadReport();
+      assert.strictEqual(page.data.state, 'insufficient',
+        '实际 state=' + page.data.state + ' msg=' + page.data.errorMsg);
+      assert.ok(page.data.errorMsg.indexOf('数据还太少') >= 0, page.data.errorMsg);
+    });
+
+    await test('成功时分段渲染 overview/weakness/suggestion 与生成时间', async () => {
+      const page = loadPage('pages/report/report.js', mock);
+      const origReq = mock.wx.request;
+      mock.wx.request = function (opts) {
+        if (opts.url.indexOf('/ai/report') >= 0) {
+          opts.success({ statusCode: 200, data: { code: '0', message: 'ok',
+            data: {
+              report: { overview: '近两周学习概况…', weakness: '薄弱环节…', suggestion: '学习建议…' },
+              generatedAt: '2026-10-17 13:45:00',
+              degraded: false,
+            } } });
+          return;
+        }
+        origReq.call(mock.wx, opts);
+      };
+      try {
+        await page.loadReport();
+        assert.strictEqual(page.data.state, 'success');
+        assert.ok(page.data.report.overview);
+        assert.ok(page.data.report.weakness);
+        assert.ok(page.data.report.suggestion);
+        assert.strictEqual(page.data.generatedAt, '2026-10-17 13:45:00');
+      } finally {
+        mock.wx.request = origReq;
+      }
+    });
+
+    await test('5001 超时进入错误态并可重试', async () => {
+      const page = loadPage('pages/report/report.js', mock);
+      const origReq = mock.wx.request;
+      mock.wx.request = function (opts) {
+        if (opts.url.indexOf('/ai/report') >= 0) {
+          opts.success({ statusCode: 200, data: { code: '5001', message: 'AI 服务超时' } });
+          return;
+        }
+        origReq.call(mock.wx, opts);
+      };
+      try {
+        await page.loadReport();
+        assert.strictEqual(page.data.state, 'error');
+        assert.ok(page.data.errorMsg.indexOf('超时') >= 0, page.data.errorMsg);
+
+        // 重试：让接口成功，验证 onRetry 真的重新拉
+        mock.wx.request = function (opts) {
+          if (opts.url.indexOf('/ai/report') >= 0) {
+            opts.success({ statusCode: 200, data: { code: '0', message: 'ok',
+              data: { report: { overview: 'OK', weakness: 'W', suggestion: 'S' },
+                generatedAt: '2026-10-17 14:00:00', degraded: false } } });
+            return;
+          }
+          origReq.call(mock.wx, opts);
+        };
+        page.onRetry();
+        await new Promise(function (r) { setTimeout(r, 800); });
+        assert.strictEqual(page.data.state, 'success', '重试后应成功');
+      } finally {
+        mock.wx.request = origReq;
+      }
+    });
+
+    await test('5002 与网络失败都进入错误态且文案可区分', async () => {
+      const page = loadPage('pages/report/report.js', mock);
+      const origReq = mock.wx.request;
+
+      mock.wx.request = function (opts) {
+        if (opts.url.indexOf('/ai/report') >= 0) {
+          opts.success({ statusCode: 200, data: { code: '5002', message: 'AI 异常' } });
+          return;
+        }
+        origReq.call(mock.wx, opts);
+      };
+      try {
+        await page.loadReport();
+        assert.strictEqual(page.data.state, 'error');
+        assert.ok(page.data.errorMsg.indexOf('不可用') >= 0, page.data.errorMsg);
+      } finally {
+        mock.wx.request = origReq;
+      }
+
+      mock.wx.request = function (opts) {
+        if (opts.url.indexOf('/ai/report') >= 0) {
+          opts.fail({ errMsg: 'request:fail net::ERR_INTERNET_DISCONNECTED' });
+          return;
+        }
+        origReq.call(mock.wx, opts);
+      };
+      try {
+        await page.loadReport();
+        assert.strictEqual(page.data.state, 'error');
+        assert.ok(page.data.errorMsg.indexOf('网络') >= 0, page.data.errorMsg);
+      } finally {
+        mock.wx.request = origReq;
+      }
+    });
+
+    await test('loading 态在请求开始时即设置（长等待有反馈）', async () => {
+      const page = loadPage('pages/report/report.js', mock);
+      const origReq = mock.wx.request;
+      let sawLoading = false;
+      mock.wx.request = function (opts) {
+        if (opts.url.indexOf('/ai/report') >= 0) {
+          // 请求发出时检查 state 是否已是 loading
+          sawLoading = page.data.state === 'loading';
+          opts.success({ statusCode: 200, data: { code: '5003', message: '数据不足' } });
+          return;
+        }
+        origReq.call(mock.wx, opts);
+      };
+      try {
+        await page.loadReport();
+        assert.strictEqual(sawLoading, true, '请求期间 state 应为 loading');
+      } finally {
+        mock.wx.request = origReq;
+      }
+    });
+
+    await test('「去学习」用 switchTab（tab 页）', () => {
+      const page = loadPage('pages/report/report.js', mock);
+      mock.log.switchTab.length = 0;
+      page.goStudy();
+      assert.strictEqual(mock.log.switchTab.length, 1);
+      assert.strictEqual(mock.log.switchTab[0].url, '/pages/study/study');
+    });
+  }
+
   // ============================================================ 完整性
   group('全部 wx.request 均经 request.js 发出');
   {

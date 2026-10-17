@@ -1,6 +1,61 @@
-<view class="page-wrap">
-  <view class="empty">
-    <view class="empty-title">AI 学习报告</view>
-    <view class="empty-desc">待实现</view>
+<view class="page-wrap report-page">
+  <!-- 全屏 loading：AI 最慢 60 秒，必须有明确的长等待反馈 -->
+  <view class="loading-wrap" wx:if="{{state === 'loading'}}">
+    <view class="loading-spinner"></view>
+    <view class="loading-title">AI 正在分析你的学习数据…</view>
+    <view class="loading-desc">大约需要 10–30 秒，请不要退出</view>
   </view>
+
+  <!-- 数据不足 -->
+  <view class="empty" wx:elif="{{state === 'insufficient'}}">
+    <view class="empty-icon">🌱</view>
+    <view class="empty-title">数据还太少</view>
+    <view class="empty-desc">学几天再来生成报告，AI 需要至少 3 天的学习记录</view>
+    <view class="btn btn-primary empty-btn" bindtap="goStudy">去学习</view>
+  </view>
+
+  <!-- 失败：可重试 -->
+  <view class="empty" wx:elif="{{state === 'error'}}">
+    <view class="empty-icon">😵</view>
+    <view class="empty-title">报告生成失败</view>
+    <view class="empty-desc">{{errorMsg}}</view>
+    <view class="btn btn-primary empty-btn" bindtap="onRetry">重新生成</view>
+  </view>
+
+  <!-- 成功：分段渲染 -->
+  <block wx:else>
+    <view class="report-head">
+      <view class="report-title">AI 学习报告</view>
+      <view class="report-time" wx:if="{{generatedAt}}">生成于 {{generatedAt}}</view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">
+        <text class="section-dot dot-blue"></text>
+        <text>学习概况</text>
+      </view>
+      <view class="section-body">{{report.overview}}</view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">
+        <text class="section-dot dot-orange"></text>
+        <text>薄弱环节</text>
+      </view>
+      <view class="section-body">{{report.weakness}}</view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">
+        <text class="section-dot dot-green"></text>
+        <text>学习建议</text>
+      </view>
+      <view class="section-body">{{report.suggestion}}</view>
+    </view>
+
+    <view class="report-foot">
+      <view class="foot-note">报告由 AI 生成，仅供参考</view>
+      <view class="btn btn-ghost foot-btn" bindtap="onRetry">重新生成</view>
+    </view>
+  </block>
 </view>
