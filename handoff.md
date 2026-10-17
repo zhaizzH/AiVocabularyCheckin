@@ -1,13 +1,13 @@
 # HANDOFF — AI 单词学习打卡小程序（S4 程序包）
 
 > 交接文档 · 最后更新 2026-10-17
-> 仓库根：`C:\workspace\class\AiVocabularyCheckin` · 分支 `main` · HEAD `d9dc71c`
+> 仓库根：`C:\workspace\class\AiVocabularyCheckin` · 分支 `main` · HEAD `87f8892`
 
 ---
 
 ## 1. 一句话现状
 
-**四端系统中，P0 的业务后端（`backend/`）与 P1 的 `ai-service/` 均已完成；`miniprogram/`、`frontend/` 尚未开工。**
+**四端系统中，P0 业务后端、P1 `ai-service/`、P1 `miniprogram/` 均已完成；只剩 P2 `admin-web/` 未开工。**
 
 - **backend**：33 个对外接口全部实现、7 张表 SQL 就绪、三本种子词书已导入真库（22761 词）、7 道闸口 G1–G7 全部通过、单测基线 **326 tests / 0 failures / 0 errors**。任务 `10-16-backend-api` 已归档。
 - **ai-service**：35 文件 + 单测 60 passed / 4 skipped / 依赖闭包 55 包且 **DB 包为 0**；三接口真实 key 实测约 1.0s / 3.5s / 2.4s（预算 12/25/50s）；与 backend 端到端 `degraded:false` 已验，停服反证回到 `degraded:true` / `5002`；复审修复了 `except BaseException` 吞取消、`APITimeoutError` 误映射 502 两处缺陷并各补回归用例。
@@ -23,7 +23,7 @@
 | `10-16-aivocab-fullstack` | 全栈（父任务） | P0 | planning · **2/4 子任务完成** |
 | `10-16-backend-api` | Spring Boot 后端 + SQL + 种子词库 | P0 | ✅ **completed，已归档** |
 | `10-16-ai-service` | FastAPI 三个 AI 接口 | P1 | ✅ **completed（代码+单测+真实调用+联调）** |
-| `10-16-miniprogram-student` | 微信小程序 F1–F10 | P1 | planning |
+| `10-16-miniprogram-student` | 微信小程序 F1–F10 | P1 | ✅ **completed（11 页 / 314 断言 / 编译零错误）** |
 | `10-16-admin-web` | React 管理端 4 页 | P2 | planning |
 
 任务元数据位于 `.trellis/tasks/<name>/`，含 `prd.md` / `design.md` / `implement.md` / `check.jsonl` / `research/`。
@@ -102,7 +102,7 @@ DBPASS=<MySQL 密码> bash backend/scripts/smoke-test.sh
 
 ---
 
-## 4. 未完成部分（后续三个子任务）
+## 4. 各子任务交付详情（4.1/4.2 已完成，4.3/4.4 待做）
 
 ### 4.1 `10-16-ai-service`（P1，✅ 已完成并归档）
 
@@ -122,12 +122,48 @@ DBPASS=<MySQL 密码> bash backend/scripts/smoke-test.sh
 - **单测**：60 passed + 4 skipped（live 用例默认跳过）；真实调用实测 example 1048ms / explain 3453ms / report 2433ms。
 - **证据留存**：`.trellis/tasks/10-16-ai-service/research/02-live-verification.md`（真实响应正文 + 耗时 + 失败路径 + 降级反证）、`research/03-implementation-review.md`（复审结论）。
 
-### 4.2 `10-16-miniprogram-student`（P1）
+### 4.2 `10-16-miniprogram-student`（P1，✅ 已完成，9 次提交）
 
-- 微信原生小程序，六 tabBar（首页/学习/复习/错题/统计/我的），F1–F10。
-- **依赖真实后端**（不能只做静态页面）；`wx-login` 依赖 AppID，缺 AppID 时用账号密码登录跑通 F2–F10。
-- AI 界面（F5/F7/F8）在无 key 时应验证**降级态**。
-- 热力图用 84 个 view + 4 档 CSS 类（不引第三方库）；掌握度曲线用 `<canvas type="2d">` 手绘。
+- 微信原生小程序，**五** tabBar（首页/学习/复习/错题/我的），F1–F10 全实现，11 个页面。
+- **零第三方库**：热力图 = 84 个 `<view>` + 4 档 CSS 类；掌握度曲线 = 手写 `<canvas type="2d">` 双 y 轴折线。
+- **分层铁律**：`pages/` 不调 `wx.request`、不拼 URL、不判 `code`；`services/` 只封装 API；`utils/request.js` 是唯一网络出口。
+- **验证规模 314 项断言**（+ 16 项降级手动）：静态 18 / 接口契约 76 / 复习 18 / 错题 26 / 报告 11 / 统计 18 / 页面 98 / 全链路 49。
+  一键：`cd miniprogram && PYTHONIOENCODING=utf-8 python scripts/verify_all.py`
+- 编译：`cli.bat preview` 退出码 0、零错误、产出预览二维码。
+
+**⚠️ PRD 与平台冲突（已决策，勿回退）**
+
+PRD 原写 6 tab（含「统计」），微信 `tabBar.list` **硬上限 5 项**，编译器直接拒绝，
+`custom: true` 自定义 tabBar 同样受 `list` 2–5 项限制，无法绕过。
+已与用户确认：**去掉「统计」tab**，统计改为普通页，入口两处（首页快捷入口 + 我的页「学习统计」）。
+`prd.md` 已同步改为 5 tab——否则后续验收会按错误基准判定。
+
+**必须知道的坑（都踩过并已加门禁）**
+
+1. **`ERROR_CODES.X` 拼写错了不报错**：JS 未定义属性静默 `undefined`，分支永不命中。
+   实例：`ERROR_CODES.PARAM_INVALID` 不存在（应为 `VALIDATION_FAILED`），
+   导致无学习记录的复习词永久卡在列表。（`check_error_code_refs`）
+2. **WXML 里不能写 `map[key].prop`**：key 不存在时读 `undefined` 的属性，
+   渲染空面板且**无任何报错**。一律在 JS 里拍平成扁平字段。（错题页 `decorate()`）
+3. **`getApp()` mock 必须单例**：每次返新对象会让「读-改-写」缓存失效，缓存用例假失败。
+4. **页面测试判进度用 `index` 不用 `finished`**：`finished` 中途恒 0（只最后刷新），当循环条件会跑满全部词。
+5. **`advance()` 学完最后一词必须 `await loadPlan()`**：原先 fire-and-forget，
+   用户立刻点打卡时 `finished` 还是旧值、按钮假禁用。
+6. **F9 空态绝不用 `masteryRate`**：后端无数据时返 `100` 不是 `0`。判据用三个计数全 0。
+7. **热力图按 `check_in_date` 聚合**：学了未打卡仍是 0 档。这是契约行为，不是 bug。
+8. **静态门禁匹配前必剥注释**：否则解释性注释里提到错误写法就误报。（`strip_js_comments`）
+9. **可点元素 ≥88rpx 是 PRD 明文验收标准**：模拟器上看不出，真机点不中才暴露。
+   `check_tap_target_size()` 扫所有 `bindtap` 元素的 wxss 高度，修出 13 处真实违规。
+10. **非 tab 页必须有入口**：从 tabBar 移出的页面若入口被删就是死页——编译过、单页测试过、
+    用户永远打不开。`check_page_reachable()` 按登记表扫入口。
+11. **`storage` 只有 `clearAuth`，没有 `clearAll`**。
+12. **AI 降级是成功路径不是错误**：F5 例句 `degraded:true` 走 HTTP 200 + `code "0"`，前端必须显示黄条而非错误。
+    F7/F8 才如实报 5001/5002。AI 挂掉时打卡、学习、错题、统计必须全部正常。
+13. **F7 讲解失败不影响「标记已掌握」**：PRD 硬约束，有专门断言。
+
+**静态门禁 18 项**（`scripts/verify_miniprogram.py`，每个都做过牙齿验证）：
+分层红线（pages 不碰 wx.request / URL / code）、错误码拼写真实性、tab 跳转 API 正确性、
+非 tab 页可达性、可点元素高度、打卡文案不写死 20、统计空态判据、关于页 BSD 版权与版本号等。
 
 ### 4.3 `10-16-admin-web`（P2）
 
@@ -189,14 +225,14 @@ DBPASS=<MySQL 密码> bash backend/scripts/smoke-test.sh
 | 库 | `ai_vocab`（`anime_tracker` 不动） |
 | 连接 | `127.0.0.1:3306` / `root` / 密码 `<REDACTED_DB_PASSWORD>` |
 | 后端服务 | `http://127.0.0.1:8080` |
-| ai-service 预期地址 | `http://127.0.0.1:8000`（**当前未实现**） |
+| ai-service 地址 | `http://127.0.0.1:8000`（✅ 已实现，`/health` 返回 `llmConfigured:true`） |
 
 ### 已提供 / 未提供
 
 | 凭据 | 状态 |
 |---|---|
 | 微信 AppID / AppSecret | ✅ 已提供（已配入本地 `application-local.yml`） |
-| DeepSeek API Key | ❌ **未提供** → ai-service 真实生成路径无法验证 |
+| DeepSeek API Key | ✅ 已配（`ai-service/.env`，已 gitignore）；真实调用实测 example 1.0s / explain 3.5s / report 2.4s |
 | JWT_SECRET | 本地已生成（`application-local.yml`，不入仓） |
 
 ### 已知环境坑（踩过，勿重复）
@@ -236,6 +272,23 @@ python backend/scripts/verify-h2-schema-parity.py     # H2 ↔ MySQL 结构一�
 # ── 种子导入（一次性，幂等）──
 mvn spring-boot:run -Dspring-boot.run.profiles=local \
   -Dspring-boot.run.arguments=--vocab.seed=true
+
+# ── 小程序验证（需先起后端 8080 + ai-service 8000 + MySQL）──
+cd miniprogram
+PYTHONIOENCODING=utf-8 python scripts/verify_all.py       # 一键 8 套件，314 断言
+
+# 单独跑（调 bug 时用）
+PYTHONIOENCODING=utf-8 python scripts/verify_miniprogram.py   # 18 项静态门禁（无需服务）
+PYTHONIOENCODING=utf-8 node  scripts/verify_page_flow.js      # 98 项页面逻辑
+PYTHONIOENCODING=utf-8 python scripts/verify_e2e_flow.py      # 49 项 F1→F10 全链路
+PYTHONIOENCODING=utf-8 python scripts/verify_degraded_flow.py # 16 项降级（须先停 ai-service）
+
+# ── 小程序编译（需开发者工具开启服务端口）──
+# 若 CLI 报 "IDE service port disabled"，用该参数重启 IDE 一次：
+#   "/c/software/ide/微信web开发者工具/微信开发者工具.exe" --enable-service-port --cli --remote-port 3799
+cd "/c/software/ide/微信web开发者工具"
+./cli.bat preview --project "C:\\workspace\\class\\AiVocabularyCheckin\\miniprogram" --desc "验证"
+#   退出码 0 + 末尾有二维码 = 编译通过
 ```
 
 ---
@@ -264,12 +317,13 @@ mvn spring-boot:run -Dspring-boot.run.profiles=local \
 ## 9. 风险与待办
 
 | 项 | 说明 | 建议 |
-|---|---|---|
-| DeepSeek key 缺失 | ai-service 成功路径无法端到端验证 | 拿到 key 后补验；先完成代码 + mock 单测 |
-| `wx-login` 端到端未验 | AppID 已提供，但未跑真实 code2Session 全链路 | 小程序端联调时一并验证 |
+|---|---|---|---|
+| `wx-login` 端到端未验 | appid + secret 均有效（微信返回 `40029 invalid code` 证明凭证正确），但真机 `jscode2session` 全链路需真实微信环境 | 真机调试时验；当前账号密码登录链路已全绿 |
+| 关于页「第 N 组」文案 | 待用户提供，现为占位（`groupText: ''`，WXML 用 `wx:if` 隐藏，不影响渲染） | 用户给出后填 `about.js` |
+| PRD 6 tab → 5 tab | 平台硬限制，已决策并回写 prd.md | 已解决，勿回退 |
 | 需求清单 §7 与 S3 V1.2 冲突 | 见 §8 警告 | 回写需求清单（低优先） |
 | 归档任务元数据陈旧 | `description` 仍写 27 接口 | 可忽略（已归档，本就不该再改） |
-| 管理端/小程序未开工 | 各为独立子任务 | 按 P1 → P1 → P2 顺序推进 |
+| 管理端未开工 | P2 子任务 | 下一个任务 |
 
 ---
 
@@ -279,19 +333,22 @@ mvn spring-boot:run -Dspring-boot.run.profiles=local \
 
 - [ ] `cd backend && mvn -o test` → 326 tests / 0 failures / 0 errors
 - [ ] `DBPASS=<REDACTED_DB_PASSWORD> bash backend/scripts/smoke-test.sh` → exit 0
-- [ ] 查 `ai_vocab`：`word_book` 3 行、`word` 22761 行、其余 0 行
+- [ ] 查 `ai_vocab`：`word_book` 3 行、`word` 22761 行
 - [ ] 查 `anime_tracker` 20 表未变
-- [ ] 读 `.trellis/workspace/zhaizzH/journal-1.md` Session 8/9 恢复上下文
-- [ ] 读 `docs/接口详细设计.md`（V1.2）§9 后再动 ai-service
-- [ ] 确认 `git status` 里 24 项 `docs/` 删除**非本任务引入**（其它窗口的改动，勿误提交）
+- [ ] 起后端 8080 + ai-service 8000，`cd miniprogram && PYTHONIOENCODING=utf-8 python scripts/verify_all.py` → 8 套件全绿
+- [ ] 微信开发者工具 `cli.bat preview` → 退出码 0 + 二维码
+- [ ] 读 `.trellis/workspace/zhaizzH/journal-1.md` 恢复上下文
+- [ ] 读 `docs/接口详细设计.md`（V1.2）§9 后再动 AI 相关代码
+- [ ] 确认 `git status` 里 `docs/logo/` 删除**非本任务引入**（其它窗口的改动，勿暂存）
 
 ---
 
 ## 11. 尚待解决的外部依赖（阻塞项汇总）
 
-1. **DeepSeek API Key** — 阻塞 ai-service 真实生成路径。
-2. **无其它阻塞** — backend 已完全可运行可复现。
+1. **无硬阻塞** — backend / ai-service / miniprogram 均可运行、可复现、可验证。
+2. 仅剩两项非阻塞待办：真机 `wx-login` 全链路、关于页「第 N 组」文案。
+3. `admin-web`（P2）尚未开工，依赖的 `/api/admin/**` 10 个接口已就绪。
 
 ---
 
-*本文档由 backend 任务收尾时生成，记录截止 HEAD `d9dc71c` 的真实状态。所有数字（测试数、词数、表数、用例数）均为实测值，非估算。*
+*本文档记录截止 HEAD `87f8892` 的真实状态。所有数字（测试数、词数、断言数）均为实测值，非估算。*
