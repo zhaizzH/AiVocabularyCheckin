@@ -12,7 +12,7 @@
 - **backend**：33 个对外接口全部实现、7 张表 SQL 就绪、三本种子词书已导入真库（22761 词）、7 道闸口 G1–G7 全部通过、单测基线 **326 tests / 0 failures / 0 errors**。任务 `10-16-backend-api` 已归档。
 - **ai-service**：35 文件 + 单测 60 passed / 4 skipped；三接口真实 key 实测约 1.0s / 3.5s / 2.4s（预算 12/25/50s）；停服反证降级 `degraded:true` / `5002` 已验。
 - **miniprogram**：19 个验证脚本 / 314 断言 + 98 项页面流断言 + 16 项降级断言，编译零错误，任务已归档。
-- **管理端 `frontend/`**：React 18 + TS + Vite + AntD 5，4 个路由页；**5 套验证脚本共 225 项断言全部通过**（其中 52 项是 Chrome 真实点击驱动，38 项是真实浏览器渲染，27 项直接执行 TS 源码，61 项打真后端，47 项静态门禁）；`tsc -b` 零错误、`npm run build` 通过。
+- **管理端 `frontend/`**：React 18 + TS + Vite + AntD 5，4 个路由页；**4 套验证脚本共 189 项断言全部通过**（其中 54 项是 Chrome 真实点击驱动，27 项直接执行 TS 源码，61 项打真后端，47 项静态门禁）；`tsc -b` 零错误、`npm run build` 通过。
 
 **下一步只剩 S4 交付文档（`docs/部署说明.md`）**；四个子任务代码侧均已闭环。
 
@@ -26,7 +26,7 @@
 | `10-16-backend-api` | Spring Boot 后端 + SQL + 种子词库 | P0 | ✅ **completed，已归档** |
 | `10-16-ai-service` | FastAPI 三个 AI 接口 | P1 | ✅ **completed（代码+单测+真实调用+联调）** |
 | `10-16-miniprogram-student` | 微信小程序 F1–F10 | P1 | ✅ **completed（11 页 / 314 断言 / 编译零错误）** |
-| `10-16-admin-web` | React 管理端 4 页 | P2 | ✅ **completed（4 页 / 225 断言 / build 通过）** |
+| `10-16-admin-web` | React 管理端 4 页 | P2 | ✅ **completed（4 页 / 189 断言 / build 通过）** |
 
 任务元数据位于 `.trellis/tasks/<name>/`，含 `prd.md` / `design.md` / `implement.md` / `check.jsonl` / `research/`。
 
@@ -200,15 +200,14 @@ pages/ components/  →  services/  →  utils/request.ts  →  后端
 | `1007` 非管理员 | 跳登录页但**不清 token**（登录态是好的，只是角色不够；清了就无法区分「权限被撤」与「登录过期」） |
 | 其他（1005/2001/2004/9001…） | 抛 `ApiError(message)`，由页面 `message.error` 展示 |
 
-**5 套验证脚本（共 225 项断言）**：
+**4 套验证脚本（共 189 项断言）**：
 
 | 脚本 | 项数 | 依赖 | 验什么 |
 |---|---|---|---|
 | `scripts/verify_admin_api.py` | 61 | 后端 8080 + admin 账号 | 真实接口契约：三种身份登录、books 裸数组、words 跨库分页、CRUD + wordCount 联动、禁用后旧 token 1003、导入 2 好 2 坏、监控字段集合 |
 | `scripts/verify_admin_web.py` | 47 | 无 | 静态门禁：分层红线、类型安全、rowKey、DTO 对齐、依赖白名单、无硬编码凭据、useSyncExternalStore 快照稳定性 |
 | `scripts/verify_admin_frontend.py` | 27 | 无（esbuild 打包真实 TS 源码） | 直接**执行真实 `request.ts`/`auth.ts`/`services/*.ts`**：token 注入、Result 解包、1003/1006/1007 分流、service 路径与参数、multipart 不手设 Content-Type |
-| `scripts/verify_admin_browser.py` | 38 | Vite 5173 + 后端 + Chrome | headless dump DOM：路由守卫拦截、4 页真实渲染、数字来自接口、无「Maximum update depth」 |
-| `scripts/verify_admin_e2e.py` | 52 | Vite 5173 + 后端 + Chrome | CDP 真实点击：填表单登录、刷新不丢登录态、搜索、新增/删除单词 + wordCount 联动、**真实 JSONL 上传预览+导入**、禁用用户后其请求 1003、清 token 被踢回登录 |
+| `scripts/verify_admin_e2e.py` | 54 | Vite 5173 + 后端 + Chrome | CDP 真实点击：填表单登录、刷新不丢登录态、搜索、新增/删除单词 + wordCount 联动、**真实 JSONL 上传预览+导入**、禁用用户后其请求 1003、清 token 被踢回登录、**收 `Runtime.consoleAPICalled` 抓「Maximum update depth」** |
 
 **踩过的 4 个真缺陷（脚本抓到的，值得记住）**：
 
@@ -363,12 +362,11 @@ cd frontend && npm install && npm run dev
 # 前提：一次性创建管理员账号（幂等）
 PYTHONIOENCODING=utf-8 python scripts/create-admin.py
 
-# 5 套验证（共 225 项断言），按依赖从轻到重
+# 4 套验证（共 189 项断言），按依赖从轻到重
 PYTHONIOENCODING=utf-8 python scripts/verify_admin_web.py       # 47 项静态门禁（无需服务）
 PYTHONIOENCODING=utf-8 python scripts/verify_admin_frontend.py  # 27 项执行真实 TS 源码（无需服务）
 PYTHONIOENCODING=utf-8 python scripts/verify_admin_api.py       # 61 项真实接口（需后端 8080）
-PYTHONIOENCODING=utf-8 python scripts/verify_admin_browser.py   # 38 项浏览器渲染（需 5173 + 8080 + Chrome）
-PYTHONIOENCODING=utf-8 python scripts/verify_admin_e2e.py       # 52 项 CDP 真实点击（需 5173 + 8080 + Chrome）
+PYTHONIOENCODING=utf-8 python scripts/verify_admin_e2e.py       # 54 项 CDP 真实点击（需 5173 + 8080 + Chrome）
 
 # 类型检查 + 生产构建
 cd frontend && npx tsc -b && npm run build

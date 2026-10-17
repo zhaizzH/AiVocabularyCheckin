@@ -78,6 +78,7 @@ class WsClient:
         if b"101" not in buf.split(b"\r\n")[0]:
             raise RuntimeError("WebSocket 握手失败: %r" % buf[:200])
         self._id = 0
+        self.events = []
 
     def send(self, payload):
         data = payload.encode("utf-8")
@@ -130,7 +131,31 @@ class WsClient:
                 if "error" in msg:
                     raise RuntimeError("CDP 错误: %s" % msg["error"])
                 return msg.get("result", {})
+            # 没有 id 的是事件（如 Runtime.consoleAPICalled），收起来供后续断言
+            if "method" in msg:
+                self.events.append(msg)
         raise RuntimeError("CDP 调用超时: %s" % method)
+
+    def drain(self, expr="1"):
+        """跑一次 evaluate，把积压的事件全部收进 self.events。"""
+        self.call("Runtime.evaluate", {"expression": expr, "returnByValue": True})
+
+    def console_text(self):
+        """把已收集到的 console 输出拼成一段文本（含 level 与参数）。"""
+        out = []
+        for m in self.events:
+            if m.get("method") != "Runtime.consoleAPICalled":
+                continue
+            p = m.get("params", {})
+            args = []
+            for a in p.get("args", []):
+                args.append(str(a.get("value", a.get("description", ""))))
+            out.append("%s: %s" % (p.get("type"), " ".join(args)))
+        for m in self.events:
+            if m.get("method") == "Runtime.exceptionThrown":
+                d = m.get("params", {}).get("exceptionDetails", {})
+                out.append("exception: %s" % d.get("text", ""))
+        return "\n".join(out)
 
     def close(self):
         try:
@@ -474,9 +499,14 @@ def main() -> int:
                        {"nodeId": doc["root"]["nodeId"],
                         "selector": "input[type=file]"})
         check("找到文件选择框", node.get("nodeId", 0) > 0)
-        ws.call("DOM.setFileInputFiles",
-                {"files": [jsonl_path.replace(os.sep, "/")],
-                 "nodeId": node["nodeId"]})
+        if node.get("nodeId", 0) <= 0:
+            # 页面白屏 / 弹窗未开时这里没有节点，继续调用会让 CDP 抛 RuntimeError
+            # 直接 traceback 中断整个脚本；改为报红往下走，保留后续断言结果。
+            check("上传文件（前置缺失跳过）", False)
+        else:
+            ws.call("DOM.setFileInputFiles",
+                    {"files": [jsonl_path.replace(os.sep, "/")],
+                     "nodeId": node["nodeId"]})
         time.sleep(2.5)
 
         prev = ev(ws, "document.body.innerText")
@@ -640,6 +670,25 @@ def main() -> int:
         check("功能名已中文化", "例句生成" in mon_text)
         check("注明数据重启清零", "重启" in mon_text)
         check("无渲染错误", "Unexpected Application Error" not in mon_text)
+        # 白屏检查：React 报「Maximum update depth exceeded」时会卸载整棵树，
+        # #root 变空且 innerText 为空。这是 useSyncExternalStore 快照不稳的典型表现，
+        # 只有真实浏览器暴露（静态门禁与 tsc 均抓不到），故必须显式断言。
+        root_len = ev(ws, "document.getElementById('root').innerHTML.length")
+        # 白屏检查：只看 #root 非空没用——缺陷下守卫会把用户踢回 /login，
+        # 登录页 HTML 照样填满 #root（实测 2163 字符），断言会假通过。
+        # 必须确认「仍停在 /monitor 且表格真渲染出来」。
+        on_page = ev(ws, "location.pathname === '/monitor' "
+                         "&& !!document.querySelector('.ant-table-tbody tr') "
+                         "&& document.getElementById('root').innerHTML.length > 500")
+        check("仍停在 /monitor 且表格已渲染（未白屏/未被踢回）", on_page is True,
+              "pathname+table+root_len 检查结果 %r" % on_page)
+        # 关键：Maximum update depth 是 console.error，不在 innerText 里。
+        # 必须收 CDP 的 Runtime.consoleAPICalled 事件才能看见——这正是
+        # 静态门禁、tsc、dump-dom 全部漏掉的缺陷形态。
+        ws.drain()
+        console = ws.console_text()
+        check("无无限重渲染报错", "Maximum update depth" not in console,
+              console[-300:] if "Maximum update depth" in console else "")
 
         # ============ 8. 无 token 直访受保护页 ============
         print("\n[8] 清除登录态后直访受保护页（守卫）")

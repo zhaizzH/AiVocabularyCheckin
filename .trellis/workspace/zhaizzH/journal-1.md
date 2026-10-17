@@ -819,7 +819,7 @@ React18+TS+Vite+AntD5+axios 管理端 4 路由页；5 套验证脚本共 225 项
 - [OK] verify_admin_web.py 47 项静态门禁（全部牙齿验证）
 - [OK] verify_admin_frontend.py 27 项直接执行真实 TS 源码（esbuild + Node）
 - [OK] verify_admin_api.py 61 项打真后端
-- [OK] verify_admin_browser.py 38 项 headless Chrome 渲染
+- [OK] verify_admin_browser.py 38 项 headless Chrome 渲染（**后续已删除**，见下方附注）
 - [OK] verify_admin_e2e.py 52 项 CDP 真实点击（含 JSONL 上传与用户禁用联动）
 - [OK] tsc -b 零错误；npm run build 通过（843KB chunk 警告为 AntD 全量，已记录为已知取舍）
 
@@ -885,6 +885,43 @@ React18+TS+Vite+AntD5+axios 管理端 4 路由页；5 套验证脚本共 225 项
 - 导入：3 行（2 好 1 坏）→ 前端预览「共 3 行，可解析 2 行，跳过 1 行」→
   导入结果「成功导入 2 条，跳过 1 条」→ 后端新词书 `wordCount == 2`（坏行真被跳过）
 - 禁用联动：disabled 某用户 → 其旧 token 请求立即 HTTP 401 + `code "1003"`
+
+### 附注：verify_admin_browser.py 已删除
+
+该脚本 38 项断言与 `verify_admin_e2e.py` 重叠（守卫重定向、词库/用户/监控三页
+渲染、真实数字、无 `Maximum update depth` 等在 e2e 里都有），唯一增量只是
+「侧边栏出现 3 个菜单项」这类静态 DOM 断言。为减少重复维护，已删除。
+
+管理端现为 **4 套验证 / 189 项断言**：静态 47 + 真实源码 27 + 真实接口 61 +
+CDP 交互 54。同时删掉了它运行时创建的 `frontend/public/_verify_seed.html`
+（同源页才能共享 localStorage），空的 `frontend/public/` 目录一并移除——
+Vite 不要求该目录存在。
+
+删 script 前的完整输出已记在本会话 Testing 一节，保留作为当时状态的记录。
+
+**删脚本时发现原 browser.py 里的白屏检查一直在假通过**，比脚本本身更值得记：
+
+1. `check("无无限重渲染", "Maximum update depth" not in dom)` —— 这个字符串
+   **从来不可能出现在 `innerText` 里**，它是 `console.error`。也就是说这条
+   断言在任何情况下都恒真，`--dump-dom` 根本看不到控制台。browser.py 当年
+   抓到了白屏缺陷，是靠「侧边栏菜单项不出现」「词书渲染不出」这些**间接**
+   断言偶然撞上的，不是靠这条。
+2. 照搬进 e2e 后，我补的第一版也假通过：`#root.innerHTML.length > 500`。
+   实测缺陷状态下长度是 **2163**——因为守卫把用户踢回了 `/login`，登录页
+   HTML 照样填满 `#root`。只看「非空」毫无意义。
+3. 正确写法两处都要改：
+   - 白屏 → 断言「仍停在 `/monitor` **且** `.ant-table-tbody tr` 存在 **且**
+     `#root` 长度 > 500」，三者同时成立才算没白屏。
+   - 控制台 → `Runtime.enable` 后把 ID 无匹配的事件（`Runtime.consoleAPICalled`
+     / `Runtime.exceptionThrown`）收进 `self.events`，调用间隙用一次
+     `Runtime.evaluate` 把积压事件抽干，再拼成文本断言。
+
+注入 `useSyncExternalStore(subscribe, () => getUserInfo(), ...)` 验证两次：
+第一版两项全绿（假通过），改完两项全红且打印出真实 `Maximum update depth`
+栈。恢复后 54 项全绿。
+
+**教训**：`X not in 某段文本` 这种否定式断言必须先确认「X 真的会出现
+在那段文本里」。否则它不是断言，是安慰剂。
 
 ### Status
 
