@@ -278,6 +278,42 @@ def check_checkin_text(res: Result) -> None:
         res.ok("打卡文案不写死 20")
 
 
+def check_error_code_refs(res: Result) -> None:
+    """
+    ERROR_CODES.X 引用的名字必须真实定义在 constants.js。
+
+    真实踩过的坑：pages/review/review.js 写了 ERROR_CODES.PARAM_INVALID，
+    而常量表里叫 VALIDATION_FAILED。JS 对未定义属性返回 undefined，
+    分支永远不命中且不报错——「无学习记录的词跳过」的兜底逻辑静默失效，
+    那个词会永远卡在待复习列表里让用户无法推进。
+    这类缺陷没有运行时报错，只能靠静态检查抓。
+    """
+    consts = ROOT / "utils" / "constants.js"
+    if not consts.exists():
+        res.ok("ERROR_CODES 引用有效（constants.js 缺失，跳过）")
+        return
+    src = read(consts)
+    defined = set(re.findall(r"^\s{2}([A-Z][A-Z0-9_]+):", src, re.M))
+    if not defined:
+        res.fail("ERROR_CODES 引用有效", "没能从 utils/constants.js 解析出任何错误码")
+        return
+
+    bad = []
+    for path in iter_source_files(ROOT):
+        rel = path.relative_to(ROOT).as_posix()
+        if rel == "utils/constants.js":
+            continue
+        body = read(path)
+        for m in re.finditer(r"ERROR_CODES\.([A-Z][A-Z0-9_]*)", body):
+            name = m.group(1)
+            if name not in defined:
+                bad.append(f"{rel} -> ERROR_CODES.{name}")
+    if bad:
+        res.fail("ERROR_CODES 引用有效", "引用了不存在的错误码: " + "; ".join(sorted(set(bad))))
+    else:
+        res.ok("ERROR_CODES 引用有效（无拼写错误）")
+
+
 def check_required_utils(res: Result) -> None:
     required = ["utils/request.js", "utils/storage.js", "utils/date.js", "utils/constants.js"]
     missing = [f for f in required if not (ROOT / f).exists()]
@@ -320,6 +356,7 @@ def main() -> int:
     check_hardcoded_address(res)
     check_third_party(res)
     check_service_fields(res)
+    check_error_code_refs(res)
     check_stats_empty_logic(res)
     check_checkin_text(res)
 

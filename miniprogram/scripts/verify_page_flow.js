@@ -1067,6 +1067,199 @@ async function main() {
     });
   }
 
+  // ============================================================ 复习（F6）
+  group('复习页（pages/review）待复习列表与实时移除');
+  {
+    const mock = createWxMock();
+    const m = freshModules(mock);
+
+    const uname = 'rv_' + Math.random().toString(36).slice(2, 10);
+    await m.auth.register({ username: uname, password: 'Test123456' });
+    const login = await m.auth.login({ username: uname, password: 'Test123456' });
+    m.storage.setToken(login.token);
+
+    await test('新账号今日待复习为 0，显示空态而非报错', async () => {
+      const page = loadPage('pages/review/review.js', mock);
+      await page.loadToday();
+      assert.strictEqual(page.data.total, 0);
+      assert.deepStrictEqual(page.data.words, []);
+      assert.strictEqual(page.data.current, null);
+      assert.strictEqual(page.data.errorMsg, '', '空列表不是错误');
+      assert.strictEqual(page.data.loading, false);
+    });
+
+    await test('加载失败时给出错误文案且 loading 复位', async () => {
+      const page = loadPage('pages/review/review.js', mock);
+      const origReq = mock.wx.request;
+      mock.wx.request = function (opts) { opts.fail({ errMsg: 'request:fail timeout' }); };
+      try {
+        await page.loadToday();
+        assert.ok(page.data.errorMsg, '应有错误文案');
+        assert.strictEqual(page.data.loading, false);
+        assert.strictEqual(page.data.current, null);
+      } finally {
+        mock.wx.request = origReq;
+      }
+    });
+
+    await test('有复习词时翻面显示释义，答对后从列表实时移除', async () => {
+      // 直接注入待复习数据：新账号天然不会有今日待复习（stage=1 → 明天），
+      // 而造真实数据需要改库，不适合放进前端用例。
+      const page = loadPage('pages/review/review.js', mock);
+      page.setData({
+        loading: false,
+        total: 2,
+        words: [
+          { wordId: 1, word: 'alpha', phonetic: '/a/', translation: 'n. 甲', stage: 2 },
+          { wordId: 2, word: 'beta', phonetic: '/b/', translation: 'n. 乙', stage: 1 },
+        ],
+        current: { wordId: 1, word: 'alpha', phonetic: '/a/', translation: 'n. 甲', stage: 2 },
+        meanings: ['n. 甲'],
+        doneCount: 0,
+        flipped: false,
+      });
+
+      page.onFlip();
+      assert.strictEqual(page.data.flipped, true, '点卡片应翻面');
+      page.onFlip();
+      assert.strictEqual(page.data.flipped, false);
+
+      const origReq = mock.wx.request;
+      mock.wx.request = function (opts) {
+        if (opts.url.indexOf('/review/record') >= 0) {
+          opts.success({
+            statusCode: 200,
+            data: { code: '0', message: 'ok',
+              data: { wordId: 1, stage: 3, nextReviewDate: '2026-10-20' } },
+          });
+          return;
+        }
+        origReq.call(mock.wx, opts);
+      };
+      try {
+        await page.onAnswer({ currentTarget: { dataset: { correct: true } } });
+        assert.strictEqual(page.data.words.length, 1, '已完成的词应实时移除');
+        assert.strictEqual(page.data.current.wordId, 2, '应前进到下一个词');
+        assert.strictEqual(page.data.doneCount, 1, '完成计数应 +1');
+        assert.strictEqual(page.data.flipped, false, '翻面状态应重置');
+        assert.strictEqual(page.data.submitting, false);
+        assert.strictEqual(page.data.finished, false, '还有词时不应进入完成页');
+      } finally {
+        mock.wx.request = origReq;
+      }
+    });
+
+    await test('最后一个词完成后进入「今日复习完成」页', async () => {
+      const page = loadPage('pages/review/review.js', mock);
+      page.setData({
+        loading: false,
+        total: 1,
+        words: [{ wordId: 9, word: 'zeta', translation: 'n. 兹', stage: 3 }],
+        current: { wordId: 9, word: 'zeta', translation: 'n. 兹', stage: 3 },
+        meanings: ['n. 兹'],
+        doneCount: 0,
+        flipped: false,
+      });
+
+      const origReq = mock.wx.request;
+      mock.wx.request = function (opts) {
+        if (opts.url.indexOf('/review/record') >= 0) {
+          opts.success({ statusCode: 200, data: { code: '0', message: 'ok',
+            data: { wordId: 9, stage: 4, nextReviewDate: '2026-10-30' } } });
+          return;
+        }
+        origReq.call(mock.wx, opts);
+      };
+      try {
+        await page.onAnswer({ currentTarget: { dataset: { correct: true } } });
+        assert.strictEqual(page.data.words.length, 0);
+        assert.strictEqual(page.data.finished, true, '应进入完成页');
+        assert.strictEqual(page.data.doneCount, 1);
+        assert.strictEqual(page.data.current, null);
+      } finally {
+        mock.wx.request = origReq;
+      }
+    });
+
+    await test('答错也移除该词并提示退回 1 天后', async () => {
+      const page = loadPage('pages/review/review.js', mock);
+      page.setData({
+        loading: false,
+        total: 2,
+        words: [
+          { wordId: 11, word: 'gamma', translation: 'n. 伽', stage: 3 },
+          { wordId: 12, word: 'delta', translation: 'n. 德', stage: 1 },
+        ],
+        current: { wordId: 11, word: 'gamma', translation: 'n. 伽', stage: 3 },
+        meanings: ['n. 伽'],
+        doneCount: 0,
+        flipped: false,
+      });
+
+      mock.log.toasts.length = 0;
+      const origReq = mock.wx.request;
+      mock.wx.request = function (opts) {
+        if (opts.url.indexOf('/review/record') >= 0) {
+          opts.success({ statusCode: 200, data: { code: '0', message: 'ok',
+            data: { wordId: 11, stage: 1, nextReviewDate: '2026-10-18' } } });
+          return;
+        }
+        origReq.call(mock.wx, opts);
+      };
+      try {
+        await page.onAnswer({ currentTarget: { dataset: { correct: false } } });
+        assert.strictEqual(page.data.words.length, 1, '答错也要从今日列表移除');
+        assert.strictEqual(page.data.current.wordId, 12);
+        const titles = mock.log.toasts.map(function (x) { return String(x.title); });
+        assert.ok(titles.some(function (s) { return s.indexOf('退回') >= 0; }),
+          '应提示退回 1 天后，实际: ' + JSON.stringify(titles));
+      } finally {
+        mock.wx.request = origReq;
+      }
+    });
+
+    await test('1005（无学习记录）跳过该词而不是卡死', async () => {
+      const page = loadPage('pages/review/review.js', mock);
+      page.setData({
+        loading: false,
+        total: 2,
+        words: [
+          { wordId: 21, word: 'omega', translation: 'n. 奥', stage: 1 },
+          { wordId: 22, word: 'sigma', translation: 'n. 西', stage: 1 },
+        ],
+        current: { wordId: 21, word: 'omega', translation: 'n. 奥', stage: 1 },
+        meanings: ['n. 奥'],
+        doneCount: 0,
+        flipped: false,
+      });
+
+      const origReq = mock.wx.request;
+      mock.wx.request = function (opts) {
+        if (opts.url.indexOf('/review/record') >= 0) {
+          opts.success({ statusCode: 200, data: { code: '1005', message: '该单词没有学习记录，无法复习' } });
+          return;
+        }
+        origReq.call(mock.wx, opts);
+      };
+      try {
+        await page.onAnswer({ currentTarget: { dataset: { correct: true } } });
+        assert.strictEqual(page.data.words.length, 1, '卡死的词应被跳过');
+        assert.strictEqual(page.data.current.wordId, 22);
+        assert.strictEqual(page.data.submitting, false, 'submitting 应复位');
+      } finally {
+        mock.wx.request = origReq;
+      }
+    });
+
+    await test('完成页「去学习」用 switchTab（tab 页）', () => {
+      const page = loadPage('pages/review/review.js', mock);
+      mock.log.switchTab.length = 0;
+      page.goStudy();
+      assert.strictEqual(mock.log.switchTab.length, 1);
+      assert.strictEqual(mock.log.switchTab[0].url, '/pages/study/study');
+    });
+  }
+
   // ============================================================ 完整性
   group('全部 wx.request 均经 request.js 发出');
   {

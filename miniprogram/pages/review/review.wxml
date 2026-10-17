@@ -1,6 +1,83 @@
-<view class="page-wrap">
-  <view class="empty">
-    <view class="empty-title">复习</view>
-    <view class="empty-desc">待实现</view>
+<view class="page-wrap review-page">
+  <view class="loading-tip" wx:if="{{loading}}">加载中…</view>
+
+  <view class="empty" wx:elif="{{errorMsg}}">
+    <view class="empty-icon">😵</view>
+    <view class="empty-title">加载失败</view>
+    <view class="empty-desc">{{errorMsg}}</view>
+    <view class="btn btn-primary empty-btn" bindtap="loadToday">重新加载</view>
   </view>
+
+  <!-- 全部完成页 -->
+  <view class="done-wrap" wx:elif="{{finished}}">
+    <view class="done-icon">🎉</view>
+    <view class="done-title">今日复习完成</view>
+    <view class="done-desc">这 {{doneCount}} 个词已安排下次复习时间</view>
+    <view class="btn btn-primary done-btn" bindtap="goStudy">去学习新词</view>
+    <view class="btn btn-ghost done-btn" bindtap="onReload">刷新看看</view>
+  </view>
+
+  <!-- 空态 -->
+  <view class="empty" wx:elif="{{total === 0}}">
+    <view class="empty-icon">🎉</view>
+    <view class="empty-title">今日没有待复习内容</view>
+    <view class="empty-desc">学过的词会按 1/3/7/15 天的节奏回来找你</view>
+    <view class="btn btn-primary empty-btn" bindtap="goStudy">去学习</view>
+  </view>
+
+  <block wx:else>
+    <!-- 顶部待复习计数 -->
+    <view class="review-head">
+      <view class="review-count">
+        <text class="review-count-num">{{words.length}}</text>
+        <text class="review-count-label">个待复习</text>
+      </view>
+      <view class="review-done" wx:if="{{doneCount > 0}}">已完成 {{doneCount}}</view>
+    </view>
+
+    <!-- 进度条 -->
+    <view class="bar-track">
+      <view class="bar-fill" style="width: {{total > 0 ? (doneCount / total * 100) : 0}}%"></view>
+    </view>
+
+    <!-- 复习卡：同学习卡，翻面核对 -->
+    <view class="word-card {{flipped ? 'card-flipped' : ''}}" bindtap="onFlip">
+      <view wx:if="{{!flipped}}" class="card-face card-front">
+        <view class="word-text">{{current.word}}</view>
+        <view class="word-phonetic" wx:if="{{current.phonetic}}">{{current.phonetic}}</view>
+        <view class="stage-tag">第 {{current.stage}} 阶段</view>
+        <view class="flip-hint">轻点卡片核对释义</view>
+      </view>
+
+      <view wx:else class="card-face card-back">
+        <view class="word-small">{{current.word}}</view>
+        <view class="word-phonetic-small" wx:if="{{current.phonetic}}">{{current.phonetic}}</view>
+        <view class="divider"></view>
+        <view class="meaning-list">
+          <view class="meaning-item" wx:for="{{meanings}}" wx:key="*this">{{item}}</view>
+        </view>
+        <view class="flip-hint">轻点返回</view>
+      </view>
+    </view>
+
+    <!-- 按钮标注后果（PRD F6） -->
+    <view class="answer-row">
+      <view
+        class="answer-btn answer-no {{submitting ? 'btn-disabled' : ''}}"
+        data-correct="{{false}}"
+        bindtap="onAnswer"
+      >
+        <view class="answer-main">✗ 想不起来</view>
+        <view class="answer-sub">退回 1 天后复习</view>
+      </view>
+      <view
+        class="answer-btn answer-yes {{submitting ? 'btn-disabled' : ''}}"
+        data-correct="{{true}}"
+        bindtap="onAnswer"
+      >
+        <view class="answer-main">✓ 记住了</view>
+        <view class="answer-sub">进入下一阶段</view>
+      </view>
+    </view>
+  </block>
 </view>

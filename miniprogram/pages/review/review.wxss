@@ -1,1 +1,236 @@
-/* 复习 页专属样式（S1 暂无） */
+/* 复习页专属样式 */
+
+.review-page {
+  padding-top: 20rpx;
+}
+
+.loading-tip {
+  text-align: center;
+  color: #999999;
+  font-size: 26rpx;
+  padding: 120rpx 0;
+}
+
+.empty-btn {
+  display: inline-flex;
+  padding: 0 56rpx;
+}
+
+/* ---------- 顶部计数 ---------- */
+
+.review-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 18rpx;
+}
+
+.review-count {
+  display: flex;
+  align-items: baseline;
+  gap: 10rpx;
+}
+
+.review-count-num {
+  font-size: 52rpx;
+  font-weight: 700;
+  color: #4a6cf7;
+  line-height: 1.1;
+}
+
+.review-count-label {
+  font-size: 26rpx;
+  color: #999999;
+}
+
+.review-done {
+  font-size: 24rpx;
+  color: #52c41a;
+}
+
+.bar-track {
+  height: 8rpx;
+  background: #eef1fe;
+  border-radius: 4rpx;
+  overflow: hidden;
+  margin-bottom: 32rpx;
+}
+
+.bar-fill {
+  height: 100%;
+  background: #4a6cf7;
+  border-radius: 4rpx;
+  transition: width 0.25s ease;
+}
+
+/* ---------- 复习卡（与学习卡一致） ---------- */
+
+.word-card {
+  background: #ffffff;
+  border-radius: 28rpx;
+  min-height: 460rpx;
+  padding: 48rpx 36rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4rpx 24rpx rgba(74, 108, 247, 0.08);
+}
+
+.card-flipped {
+  animation: flip-in 0.2s ease;
+}
+
+@keyframes flip-in {
+  from {
+    transform: rotateY(80deg);
+    opacity: 0.4;
+  }
+  to {
+    transform: rotateY(0);
+    opacity: 1;
+  }
+}
+
+.card-face {
+  width: 100%;
+  text-align: center;
+}
+
+.word-text {
+  font-size: 68rpx;
+  font-weight: 700;
+  color: #333333;
+  letter-spacing: 1rpx;
+  word-break: break-word;
+}
+
+.word-phonetic {
+  font-size: 28rpx;
+  color: #999999;
+  margin-top: 20rpx;
+}
+
+.word-small {
+  font-size: 40rpx;
+  font-weight: 600;
+  color: #333333;
+}
+
+.word-phonetic-small {
+  font-size: 24rpx;
+  color: #999999;
+  margin-top: 8rpx;
+  margin-bottom: 20rpx;
+}
+
+.stage-tag {
+  display: inline-block;
+  font-size: 22rpx;
+  color: #4a6cf7;
+  background: #eef1fe;
+  padding: 6rpx 20rpx;
+  border-radius: 20rpx;
+  margin-top: 24rpx;
+}
+
+.meaning-list {
+  text-align: left;
+}
+
+.meaning-item {
+  font-size: 30rpx;
+  color: #333333;
+  line-height: 1.8;
+  padding-left: 24rpx;
+  position: relative;
+}
+
+.meaning-item::before {
+  content: '·';
+  position: absolute;
+  left: 4rpx;
+  color: #4a6cf7;
+  font-weight: 700;
+}
+
+.flip-hint {
+  font-size: 22rpx;
+  color: #c0c0c6;
+  margin-top: 32rpx;
+}
+
+/* ---------- 按钮（含后果说明） ---------- */
+
+.answer-row {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 32rpx;
+  padding-bottom: 40rpx;
+}
+
+.answer-btn {
+  flex: 1;
+  min-height: 116rpx;
+  border-radius: 20rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  box-sizing: border-box;
+  padding: 16rpx 8rpx;
+}
+
+.answer-main {
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.answer-sub {
+  font-size: 20rpx;
+  opacity: 0.75;
+}
+
+.answer-no {
+  background: #fff1f0;
+  color: #d4380d;
+  border: 1rpx solid #ffccc7;
+}
+
+.answer-yes {
+  background: #f6ffed;
+  color: #52c41a;
+  border: 1rpx solid #b7eb8f;
+}
+
+/* ---------- 完成页 ---------- */
+
+.done-wrap {
+  text-align: center;
+  padding-top: 140rpx;
+}
+
+.done-icon {
+  font-size: 120rpx;
+  line-height: 1.2;
+}
+
+.done-title {
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #333333;
+  margin-top: 24rpx;
+}
+
+.done-desc {
+  font-size: 26rpx;
+  color: #999999;
+  margin-top: 16rpx;
+  margin-bottom: 64rpx;
+}
+
+.done-btn {
+  width: 100%;
+  margin-bottom: 24rpx;
+}
