@@ -601,7 +601,7 @@ implement.jsonl / check.jsonl。**未写任何 ai-service 代码**（Phase 2 未
 
 ---
 
-## Session 11 — ai-service 实施完成（2026-10-17 12:00–12:20）
+## Session 11: ai-service 实施完成（2026-10-17 12:00–12:20）
 
 ### Goal
 
@@ -663,7 +663,7 @@ implement.jsonl / check.jsonl。**未写任何 ai-service 代码**（Phase 2 未
 - 一次性提交（确认 `git show --stat` 无 `.env`、无 `docs/` 既有删除）
 
 
-## Session 11: ai-service 复审修复与任务归档
+## Session 12: ai-service 复审修复与任务归档
 <!-- trellis-session: v=2 fp=3480aaf594e8475d -->
 
 **Date**: 2026-10-17
