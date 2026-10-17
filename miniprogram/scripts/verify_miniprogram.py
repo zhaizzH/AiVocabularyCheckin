@@ -233,6 +233,24 @@ def check_service_fields(res: Result) -> None:
         res.ok("services 内联请求体字段名在契约白名单内")
 
 
+def strip_js_comments(text: str) -> str:
+    """去掉 // 行注释与 /* */ 块注释，保留代码。
+
+    静态门禁匹配的是「代码里写了什么」，注释里为了说明反例而出现
+    错误写法是正常的，不能被判成违规。
+    """
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    lines = []
+    for line in text.splitlines():
+        # 只处理不在字符串里的 //：本仓库的 JS 注释都在行首或代码后，
+        # 且不会在字符串里出现 "//" 后跟空格的情况，简单切分已足够。
+        idx = line.find("//")
+        if idx >= 0:
+            line = line[:idx]
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def check_stats_empty_logic(res: Result) -> None:
     """
     统计页空态不得用 masteryRate 判断。
@@ -244,8 +262,10 @@ def check_stats_empty_logic(res: Result) -> None:
     if not stats_js.exists():
         res.ok("统计空态判据（页面未实现，跳过）")
         return
-    text = read(stats_js)
-    if re.search(r"masteryRate\s*===?\s*0", text):
+    # 先剥注释：本文件的注释里就会提到这个错误写法，
+    # 若直接扫全文，解释性注释反而会让检查失败。
+    code = strip_js_comments(read(stats_js))
+    if re.search(r"masteryRate\s*===?\s*0", code):
         res.fail(
             "统计空态不使用 masteryRate === 0",
             "pages/stats/stats.js 出现 masteryRate === 0；"
