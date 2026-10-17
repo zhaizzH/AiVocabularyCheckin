@@ -60,7 +60,11 @@ Thumbs.db
 *.swp
 .idea/
 .vscode/*
+# 放行团队共享的启动/任务配置：内容不含凭据
+# （DB 口令走 application-local.yml，AI key 走 ai-service/.env，两者均已忽略）
 !.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
 
 # Local absolute paths must never be baked into tracked docs.
 # If a doc needs to reference the repo root, use a relative path instead.

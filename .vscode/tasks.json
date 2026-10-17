@@ -1,0 +1,212 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    // ═════════════════════════════ backend ═════════════════════════════
+    {
+      "label": "backend: compile",
+      "type": "shell",
+      "command": "mvn",
+      // -o 离线：避免每次调试都去中央仓库探活，本地依赖已齐时最快
+      "args": ["-o", "-q", "compile"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": ["$javac"],
+      "presentation": { "reveal": "silent", "panel": "shared", "clear": true },
+      "group": "build"
+    },
+    {
+      "label": "backend: package (skip tests)",
+      "type": "shell",
+      "command": "mvn",
+      "args": ["-o", "-q", "clean", "package", "-DskipTests"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": ["$javac"],
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": "build"
+    },
+    {
+      "label": "backend: run (spring-boot:run)",
+      "type": "shell",
+      "command": "mvn",
+      "args": ["-o", "spring-boot:run", "-Dspring-boot.run.profiles=local"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": [],
+      // 长驻进程：用 dedicated 面板，避免和一次性任务抢同一个终端
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "isBackground": true
+    },
+    {
+      // H2 内存库，不依赖本机 MySQL；适合 CI / 没起数据库时验证
+      "label": "backend: test (mvn -o test)",
+      "type": "shell",
+      "command": "mvn",
+      "args": ["-o", "test"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": ["$javac"],
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": { "kind": "test", "isDefault": true }
+    },
+
+    // ═════════════════════════════ ai-service ═════════════════════════════
+    {
+      "label": "ai-service: install deps",
+      "type": "shell",
+      // 用 venv 内的 python，避免污染系统 Python
+      "command": "${workspaceFolder}/ai-service/.venv/Scripts/python.exe",
+      "args": ["-m", "pip", "install", "-r", "requirements.txt"],
+      "options": { "cwd": "${workspaceFolder}/ai-service" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "ai-service: run (uvicorn)",
+      "type": "shell",
+      "command": "${workspaceFolder}/ai-service/.venv/Scripts/python.exe",
+      "args": ["-m", "uvicorn", "app.main:app", "--port", "8000", "--reload"],
+      "options": {
+        "cwd": "${workspaceFolder}/ai-service",
+        // .env 靠 pydantic-settings 相对 cwd 读取，故此 cwd 不可改
+        "env": { "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1" }
+      },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "isBackground": true
+    },
+    {
+      "label": "ai-service: test (pytest)",
+      "type": "shell",
+      "command": "${workspaceFolder}/ai-service/.venv/Scripts/python.exe",
+      "args": ["-m", "pytest", "-q"],
+      "options": {
+        "cwd": "${workspaceFolder}/ai-service",
+        "env": { "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1" }
+      },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": { "kind": "test", "isDefault": true }
+    },
+
+    // ═════════════════════════════ frontend ═════════════════════════════
+    {
+      "label": "frontend: npm install",
+      "type": "shell",
+      "command": "npm",
+      "args": ["install"],
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "frontend: dev server",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "dev"],
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "problemMatcher": [],
+      // isBackground + dedicated 面板：launch.json 的 preLaunchTask 要等它起好
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "isBackground": true,
+      "group": "build"
+    },
+    {
+      "label": "frontend: build",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "build"],
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "problemMatcher": ["$tsc"],
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": "build"
+    },
+    {
+      "label": "frontend: typecheck",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "typecheck"],
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "problemMatcher": ["$tsc"],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "group": { "kind": "test", "isDefault": true }
+    },
+
+    // ═════════════════════════════ 验证 / 门禁 ═════════════════════════════
+    {
+      // 纯静态检查，不需要任何服务在跑
+      "label": "verify: 小程序静态检查",
+      "type": "shell",
+      "command": "python",
+      "args": ["scripts/verify_miniprogram.py"],
+      "options": {
+        "cwd": "${workspaceFolder}/miniprogram",
+        "env": { "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1" }
+      },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": "test"
+    },
+    {
+      // 全套：需 backend 在 8080 且 MySQL 可连；降级用例要求 ai-service 不可达
+      "label": "verify: 小程序全套",
+      "type": "shell",
+      "command": "python",
+      "args": ["scripts/verify_all.py"],
+      "options": {
+        "cwd": "${workspaceFolder}/miniprogram",
+        "env": { "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1" }
+      },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": "test"
+    },
+    {
+      "label": "verify: 后端冒烟 (smoke-test.sh)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["backend/scripts/smoke-test.sh"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": "test"
+    },
+    {
+      "label": "verify: 管理端 API",
+      "type": "shell",
+      "command": "python",
+      "args": ["scripts/verify_admin_api.py"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": { "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1" }
+      },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": "test"
+    },
+    {
+      "label": "verify: 管理端前端",
+      "type": "shell",
+      "command": "python",
+      "args": ["scripts/verify_admin_frontend.py"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": { "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1" }
+      },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "group": "test"
+    },
+
+    // ═════════════════════════════ 诊断 ═════════════════════════════
+    {
+      // 端口占用是本地开发最常见的启动失败原因，做成任务比记命令快
+      "label": "doctor: 端口与依赖体检",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-c",
+        "echo '--- 端口 8080/8000/5173/3306 ---'; for p in 8080 8000 5173 3306; do if (exec 3<>/dev/tcp/127.0.0.1/$p) 2>/dev/null; then echo \"  $p  已占用\"; exec 3>&-; else echo \"  $p  空闲\"; fi; done; echo '--- 工具链 ---'; java -version 2>&1 | head -1; mvn -v 2>&1 | head -1; node -v; python --version; echo '--- 关键文件 ---'; for f in backend/src/main/resources/application-local.yml ai-service/.env frontend/node_modules/.bin/vite; do [ -e \"$f\" ] && echo \"  OK   $f\" || echo \"  缺失 $f\"; done"
+      ],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true }
+    }
+  ]
+}

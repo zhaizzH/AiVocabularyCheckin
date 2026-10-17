@@ -1,0 +1,130 @@
+{
+  // 调试配置：四端各一条 + 两个组合入口。
+  //
+  // 本文件不含任何明文凭据：
+  //   - backend 的口令来自 backend/src/main/resources/application-local.yml（已 gitignore）
+  //   - ai-service 的 key 来自 ai-service/.env（已 gitignore）
+  // 需要环境变量覆盖时用 "${env:XXX}" 引用系统变量，不要写死值。
+  "version": "0.2.0",
+  "configurations": [
+    // ─────────────────────────────── backend ───────────────────────────────
+    {
+      "type": "java",
+      "name": "backend: Spring Boot (local)",
+      "request": "launch",
+      // 不写 projectName：由 mainClass 反查所属 Maven 模块更稳妥，
+      // 写错 projectName 会直接导致 "Cannot find project" 启动失败。
+      "mainClass": "com.vocab.VocabApplication",
+      "cwd": "${workspaceFolder}/backend",
+      // application.yml 默认 profile 已是 local，这里显式声明便于日志核对
+      "vmArgs": "-Dspring.profiles.active=local -Dfile.encoding=UTF-8",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "preLaunchTask": "backend: compile",
+      "env": {
+        // 控制台中文日志不乱码
+        "JAVA_TOOL_OPTIONS": "-Dfile.encoding=UTF-8"
+      }
+    },
+
+    // ────────────────────────────── ai-service ──────────────────────────────
+    {
+      // 关键：cwd 必须是 ai-service/。
+      // pydantic-settings 的 env_file=".env" 相对**工作目录**解析，
+      // cwd 指错就读不到 DEEPSEEK_API_KEY —— 服务照样能起，
+      // 但三个 AI 接口全返回 503 ai_service_llm_not_configured。
+      "type": "debugpy",
+      "name": "ai-service: uvicorn (port 8000)",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--port", "8000", "--reload"],
+      "cwd": "${workspaceFolder}/ai-service",
+      "python": "${workspaceFolder}/ai-service/.venv/Scripts/python.exe",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONUTF8": "1"
+      }
+    },
+    {
+      // 单测不依赖真实 key：缺 key 的用例走 skip 分支
+      "type": "debugpy",
+      "name": "ai-service: pytest",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-q", "--no-header"],
+      "cwd": "${workspaceFolder}/ai-service",
+      "python": "${workspaceFolder}/ai-service/.venv/Scripts/python.exe",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONUTF8": "1"
+      }
+    },
+
+    // ─────────────────────────────── frontend ──────────────────────────────
+    {
+      // 端口固定 5173：后端 CORS 白名单写死了这个值（见 vite.config.ts 注释）
+      "type": "chrome",
+      "name": "frontend: Chrome @ 5173",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/frontend/src",
+      "preLaunchTask": "frontend: dev server",
+      "sourceMaps": true
+    },
+    {
+      "type": "msedge",
+      "name": "frontend: Edge @ 5173",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/frontend/src",
+      "preLaunchTask": "frontend: dev server",
+      "sourceMaps": true
+    },
+
+    // ────────────────────────── 验收脚本（无需断点，起环境）──────────────────
+    {
+      // 学生端一键验证：需要 backend + MySQL；
+      // 其中 verify_degraded_flow.py 要求 ai-service **不可达**，
+      // 故本配置刻意不联动 ai-service。
+      "type": "debugpy",
+      "name": "verify: 小程序全套",
+      "request": "launch",
+      "program": "${workspaceFolder}/miniprogram/scripts/verify_all.py",
+      "cwd": "${workspaceFolder}/miniprogram",
+      "python": "python",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONUTF8": "1"
+      }
+    }
+  ],
+
+  // compounds 与 configurations 同级；引用名必须与上面完全一致
+  "compounds": [
+    {
+      "name": "★ 全栈：backend + ai-service + 前端",
+      "configurations": [
+        "backend: Spring Boot (local)",
+        "ai-service: uvicorn (port 8000)",
+        "frontend: Chrome @ 5173"
+      ],
+      "stopAll": true,
+      "presentation": { "group": "1-fullstack", "order": 1 }
+    },
+    {
+      "name": "★ 双后端：backend + ai-service（跑接口验收用）",
+      "configurations": [
+        "backend: Spring Boot (local)",
+        "ai-service: uvicorn (port 8000)"
+      ],
+      "stopAll": true,
+      "presentation": { "group": "1-fullstack", "order": 2 }
+    }
+  ]
+}

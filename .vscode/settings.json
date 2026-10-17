@@ -1,0 +1,49 @@
+{
+  // 这是 .vscode 下**唯一**入库的文件（见 .gitignore：.vscode/* 全忽略，只放行本文件）。
+  // 因此这里只写「团队共享也不会有副作用」的配置，不放任何机器相关路径或凭据。
+  "files.encoding": "utf8",
+  "files.eol": "\n",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+
+  // 本项目中文注释与提示词很多，误报会淹没有效信息
+  "editor.formatOnSave": false,
+  "editor.rulers": [100],
+
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/target": true,
+    "**/.venv": true,
+    "**/__pycache__": true,
+    "**/dist": true,
+    "**/.tmp": true
+  },
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/target/**": true,
+    "**/.venv/**": true,
+    "**/__pycache__/**": true
+  },
+
+  // ── Java ──
+  // 让 Java 扩展用本项目固定的 JDK，而不是机器上随便哪个
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.compile.nullAnalysis.mode": "automatic",
+  "spring-boot.ls.problem.application-properties.unknown-property": "WARNING",
+
+  // ── Python ──
+  "python.terminal.activateEnvironment": false,
+  "python.analysis.extraPaths": ["${workspaceFolder}/ai-service"],
+
+  // ── TypeScript / 前端 ──
+  "typescript.tsdk": "frontend/node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+
+  // ── 终端 ──
+  "terminal.integrated.defaultProfile.windows": "Git Bash",
+  "terminal.integrated.env.windows": {
+    // Python 输出中文到集成终端时的乱码问题，全靠这两个
+    "PYTHONIOENCODING": "utf-8",
+    "PYTHONUTF8": "1"
+  }
+}
