@@ -661,3 +661,46 @@ implement.jsonl / check.jsonl。**未写任何 ai-service 代码**（Phase 2 未
 
 - 更新 `handoff.md` 中 ai-service 状态
 - 一次性提交（确认 `git show --stat` 无 `.env`、无 `docs/` 既有删除）
+
+
+## Session 11: ai-service 复审修复与任务归档
+<!-- trellis-session: v=2 fp=3480aaf594e8475d -->
+
+**Date**: 2026-10-17
+**Task**: ai-service 复审修复与任务归档
+**Branch**: `main`
+
+### Summary
+
+复审发现 2 个 P0 缺陷（except BaseException 吞取消、APITimeoutError 误映射 502），修复并补牙齿验证过的回归用例；补齐 live 测试与真实验证证据；修正会自我命中的红线命令；任务归档。
+
+### Main Changes
+
+- 修复 except BaseException 吞掉 asyncio.CancelledError：改为 except Exception 并单独放行取消，收敛为 _handle() 上下文管理器
+- 修复 openai.APITimeoutError 不被识别为超时：MRO 不含 TimeoutError，超时判据显式补上
+- 新增 tests/test_live_deepseek.py（默认 skip）与 research/02-live-verification.md
+- 新增 research/03-implementation-review.md 记录复审结论
+- 修正 implement.md 红线 grep 会命中 requirements.txt 注释而永久失败
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9cc81fb` | fix(ai-service): 修正异常映射两处缺陷并补齐真实路径验证 |
+| `dc67e36` | docs(handoff): ai-service 归档前同步最终验证数据与两条异常映射陷阱 |
+
+### Testing
+
+- [OK] pytest -q → 60 passed, 4 skipped
+- [OK] DEEPSEEK_LIVE_TEST=1 → 4 passed；example 1048ms / explain 3453ms / report 2433ms
+- [OK] 两条回归用例做回退验证：修复即绿、回退即红
+- [OK] ruff F,E9,B 全通过；app/ 零数据库词、零驱动 import、无 print()、.env 未跟踪
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 读 10-16-miniprogram-student 的 prd/design/implement/research 后 task.py start
+- 实跑验证 wx-login：application-local.yml 已有真实 appid/secret，可能不再阻塞
