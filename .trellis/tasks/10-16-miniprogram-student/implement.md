@@ -38,9 +38,46 @@
 
 | 阶段 | 状态 | 备注 |
 |---|---|---|
-| S1 | ✅ 完成 | 13 项静态检查全绿；76 项后端断言全绿（真实后端） |
-| S2–S9 | ⏳ 待做 | |
-| S10 | ⏳ 待做 | CLI 编译需先在开发者工具「设置→安全设置」开启服务端口 |
+| S1 骨架 + 网络层 | ✅ 完成 | `87fc561`；76 项后端断言全绿 |
+| S2 登录链路 F1 | ✅ 完成 | `87fc561`；含微信首登昵称引导 |
+| S3 首页 F2 + 词库 F3 | ✅ 完成 | `5ac4950`；42 项断言 |
+| S4 学习 F4 + 打卡 F5 | ✅ 完成 | `7b9423c`；修 advance() 竞态 |
+| S5 复习 F6 | ✅ 完成 | `d7fd471`；修 PARAM_INVALID 拼写缺陷 |
+| S6 错题本 F7 + AI 讲解 | ✅ 完成 | `da0be3a`；26 项后端断言 |
+| S7 AI 报告 F8 | ✅ 完成 | `96b8450`；四种终态 |
+| S8 统计 F9 | ✅ 完成 | `b1a1aa7`；手绘 canvas 双折线 |
+| S9 我的 + 关于 F10 | ✅ 完成 | `636bd49`；含 BSD 版权门禁 |
+| S10 全链路验收 | ✅ 完成 | 328 项断言全绿；`cli.bat preview` 编译零错误 |
+
+**S10 阶段发现：PRD 的 6 tab 与微信平台限制冲突**
+
+编译器报 `app.json: ["tabBar"]["list"] 不能超过 5 项`。`custom: true` 自定义
+tabBar 也受同一限制（`list` 仍需声明 2–5 项）。已与用户确认取舍：
+
+- 去掉「统计」tab → 底部导航为 首页 / 学习 / 复习 / 错题 / 我的
+- 统计页改为普通页，入口两处：首页快捷入口 + 我的页「学习统计」
+- `index.js#goStats` 与 `me.js#onOpenStats` 都改用 `navigateTo`
+- `stats.js#goStudy` 仍用 `switchTab`（学习仍是 tab 页）
+
+为此新增一条静态门禁 `check_page_reachable()`：非 tab 页必须在登记表
+里列出的页面中找到跳转入口。页面从 tabBar 移出后若入口被删，它就成了
+死页——编译通过、单页测试通过、用户永远打不开，只有静态扫入口能发现。
+牙齿验证：同时删掉两处 stats 入口 → 门禁变红 → 恢复 → 变绿。
+
+**当前验证规模（真实后端 + 真实 DeepSeek）**
+
+| 套件 | 项数 | 覆盖 |
+|---|---|---|
+| `verify_miniprogram.py` | 16 | 静态红线（分层、错误码拼写、tab 跳转、版权、空态判据） |
+| `verify_api_flow.py` | 76 | 契约字段、错误码、边界 |
+| `verify_review_flow.py` | 18 | SM-2 间隔、错题联动 |
+| `verify_mistake_flow.py` | 26 | 错题收录、AI 讲解、4001/4002 |
+| `verify_report_flow.py` | 11 | 5003 前置校验、真实报告生成 |
+| `verify_stats_flow.py` | 18 | 热力图分档、掌握度曲线、空态 |
+| `verify_page_flow.js` | 98 | 页面方法直调（含 canvas 绘制序列） |
+| `verify_e2e_flow.py` | 49 | F1→F10 串联 |
+| `verify_degraded_flow.py` | 16 | ai-service 停机降级（手动） |
+| **合计** | **328** | 一键：`python scripts/verify_all.py` |
 
 **S1 已交付**：
 - `app.js` / `app.json`（11 页 + 6 tabBar 纯文字）/ `app.wxss`（仅设计 token + 原子类）

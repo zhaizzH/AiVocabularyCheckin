@@ -45,6 +45,12 @@
 }
 
 .card-error {
+  /* 点击重试的可点区域，PRD 验收要求 ≥88rpx */
+  min-height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   font-size: 26rpx;
   color: #d4380d;
   background: #fff1f0;
@@ -162,7 +168,8 @@
   flex: 1;
   background: #ffffff;
   border-radius: 24rpx;
-  padding: 32rpx 0;
+  /* PRD 验收：可点元素高度 ≥88rpx（图标 58 + 文字 30 + padding 两倍） */
+  padding: 30rpx 0;
   text-align: center;
 }
 

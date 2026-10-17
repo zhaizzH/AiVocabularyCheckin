@@ -119,7 +119,8 @@ Page({
   },
 
   goStats() {
-    wx.switchTab({ url: '/pages/stats/stats' });
+    // 统计不是 tab 页（微信 tabBar 最多 5 项，统计改为普通页）
+    wx.navigateTo({ url: '/pages/stats/stats' });
   },
 
   goReport() {

@@ -14,7 +14,8 @@
 
 .tab-item {
   flex: 1;
-  height: 76rpx;
+  /* PRD 验收：可点元素高度 ≥88rpx */
+  height: 88rpx;
   border-radius: 20rpx;
   background: #ffffff;
   color: #666666;
@@ -125,8 +126,9 @@
 
 .act-btn {
   flex: 1;
-  height: 64rpx;
-  border-radius: 32rpx;
+  /* PRD 验收：可点元素高度 ≥88rpx */
+  height: 88rpx;
+  border-radius: 44rpx;
   display: flex;
   align-items: center;
   justify-content: center;

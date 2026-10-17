@@ -59,6 +59,11 @@
         <text class="menu-label">更换头像</text>
         <text class="menu-arrow">›</text>
       </view>
+      <view class="menu-item" bindtap="onOpenStats">
+        <text class="menu-icon">📊</text>
+        <text class="menu-label">学习统计</text>
+        <text class="menu-arrow">›</text>
+      </view>
       <view class="menu-item" bindtap="onOpenReport">
         <text class="menu-icon">🤖</text>
         <text class="menu-label">AI 学习报告</text>

@@ -116,12 +116,21 @@ def check_app_json(res: Result) -> dict:
     else:
         res.ok(f"页面四件套齐全（{len(app.get('pages', []))} 个页面 × 4 文件）")
 
-    # 2. tabBar 恰好 6 项且路径都已注册
+    # 2. tabBar 恰好 5 项且路径都已注册
+    # 微信小程序 tabBar.list 硬上限为 5 项（PRD 原写 6 项，编译器直接拒绝）。
+    # 已与用户确认取舍：去掉「统计」，统计改为普通页，由首页快捷入口
+    # 与「我的 → 学习统计」两处进入。
     tab_list = app.get("tabBar", {}).get("list", [])
-    if len(tab_list) != 6:
-        res.fail("tabBar 为 6 项", f"实际 {len(tab_list)} 项")
+    if len(tab_list) != 5:
+        res.fail("tabBar 为 5 项（微信上限）", f"实际 {len(tab_list)} 项")
+    elif len(tab_list) > 5:
+        res.fail("tabBar 为 5 项（微信上限）", f"实际 {len(tab_list)} 项，超过平台上限")
     else:
-        res.ok("tabBar 为 6 项")
+        res.ok("tabBar 为 5 项（微信上限）")
+
+    # 统计页被移出 tabBar，但仍须注册为普通页面（否则 navigateTo 会失败）
+    if "pages/stats/stats" not in set(app.get("pages", [])):
+        res.fail("统计页仍注册为可访问页面", "pages 里找不到 pages/stats/stats")
 
     registered = set(app.get("pages", []))
     unregistered = [t.get("pagePath") for t in tab_list if t.get("pagePath") not in registered]
@@ -275,6 +284,177 @@ def check_stats_empty_logic(res: Result) -> None:
         res.ok("统计空态不使用 masteryRate === 0")
 
 
+# 可点元素高度豁免：这些元素不是「可点击的按钮」，
+# 而是「可点开看提示的数据格子」，不适用 88rpx 触控目标标准。
+TAP_HEIGHT_EXEMPT = {
+    ("stats", "cell"),        # 热力图 84 个色块，PRD F9「仅展示无跳转」
+    ("mistakes", "explain-panel"),  # 讲解面板是容器，收起用整块点击
+}
+
+
+# 非 tab 页的入口登记表：页面 → 必须存在入口的页面文件列表。
+# 新增非 tab 页时在此登记，否则会漏检。
+NON_TAB_ENTRY_POINTS = {
+    "books": ["index", "me", "study"],   # 词书管理（详情/换书）
+    "report": ["index", "me"],           # AI 学习报告
+    "about": ["me"],                     # 关于
+    # 统计因 tabBar 上限 5 项被移出，必须有入口，否则是孤岛
+    "stats": ["index", "me"],
+}
+
+
+def check_page_reachable(res: Result) -> None:
+    """
+    非 tab 页必须在某处有跳转入口。
+
+    页面从 tabBar 移出后如果没人再跳它，它就是死页：编译通过、
+    单页测试通过、用户永远打不开。静态扫入口是唯一能自动发现的办法。
+    """
+    app = json.loads(read(ROOT / "app.json"))
+    tab_paths = {item["pagePath"] for item in app["tabBar"]["list"]}
+
+    missing = []
+    for page, entry_pages in NON_TAB_ENTRY_POINTS.items():
+        target = "pages/%s/%s" % (page, page)
+        if target in tab_paths:
+            continue  # 仍是 tab 页，不需要额外入口
+        found = False
+        for entry in entry_pages:
+            js = ROOT / "pages" / entry / (entry + ".js")
+            if not js.exists():
+                continue
+            code = strip_js_comments(read(js))
+            if "'/%s'" % target in code or '"/%s"' % target in code:
+                found = True
+                break
+        if not found:
+            missing.append("%s 无任何入口（检查了 %s）"
+                           % (target, "、".join(entry_pages)))
+
+    if missing:
+        res.fail("非 tab 页均有入口可达", "；".join(missing))
+    else:
+        res.ok("非 tab 页均有入口可达")
+
+
+def check_tap_target_size(res: Result) -> None:
+    """
+    可点元素高度 ≥88rpx（PRD 验收标准）。
+
+    触控目标过小在模拟器上完全看不出来，只有真机上手指点不中才暴露。
+    rpx 值散落在 11 个 wxss 里，靠人工逐个核对必然漏，故固化成门禁。
+
+    高度来源三种都算数：height、min-height、padding 撑高（配 line-height）。
+    """
+    app_wxss = read(ROOT / "app.wxss")
+    tiny = []
+
+    for page_dir in sorted((ROOT / "pages").iterdir()):
+        if not page_dir.is_dir():
+            continue
+        name = page_dir.name
+        wxml = page_dir / (name + ".wxml")
+        wxss = page_dir / (name + ".wxss")
+        if not wxml.exists() or not wxss.exists():
+            continue
+        html = read(wxml)
+        css = read(wxss)
+
+        tapped = set()
+        # class 在 tap 属性之前或之后都可能出现，两种顺序都抓
+        for m in re.finditer(
+            r'class="([^"]*)"[^>]*?(?:bindtap|catchtap)="(\w+)"', html
+        ):
+            tapped.update(m.group(1).split())
+        for m in re.finditer(
+            r'(?:bindtap|catchtap)="(\w+)"[^>]*?class="([^"]*)"', html
+        ):
+            tapped.update(m.group(2).split())
+
+        for cls in sorted(tapped):
+            # 跳过模板表达式残留（如 'action-add'}}），它们不是真实 class 名
+            if "{{" in cls or "}" in cls or "'" in cls or ":" in cls:
+                continue
+            if (name, cls) in TAP_HEIGHT_EXEMPT:
+                continue
+
+            rule = None
+            for src in (css, app_wxss):
+                mm = re.search(r"\." + re.escape(cls) + r"\s*\{([^}]*)\}", src)
+                if mm:
+                    rule = mm.group(1)
+                    break
+            if rule is None:
+                # 找不到样式：无法判定，不算违规（可能是全局原子类）
+                continue
+
+            px = 0
+            hm = re.search(r"(?<!min-)height:\s*(\d+)rpx", rule)
+            mh = re.search(r"min-height:\s*(\d+)rpx", rule)
+            pm = re.search(r"padding:\s*(\d+)rpx", rule)
+            lh = re.search(r"line-height:\s*(\d+)rpx", rule)
+
+            if hm:
+                px = int(hm.group(1))
+            if mh:
+                px = max(px, int(mh.group(1)))
+            if pm:
+                pad = int(pm.group(1)) * 2
+                # padding 撑高时，内容高度按 line-height 或字号估算
+                content = int(lh.group(1)) if lh else 28
+                px = max(px, pad + content)
+
+            if px and px < 88:
+                tiny.append("%s.%s = %drpx" % (name, cls, px))
+
+    if tiny:
+        res.fail(
+            "可点元素高度 ≥88rpx",
+            "以下可点元素过小：" + "、".join(tiny),
+        )
+    else:
+        res.ok("可点元素高度 ≥88rpx")
+
+
+def check_tab_navigation(res: Result) -> None:
+    """
+    tab 页必须用 switchTab，非 tab 页必须用 navigateTo。
+
+    用 navigateTo 打开 tab 页会直接失败（微信报「can not navigateTo a
+    tabbar page」），而且这行代码在静态 review 里看起来完全正常——
+    只有在真机上点到按钮才会暴露。反过来用 switchTab 打开非 tab 页
+    同样失败。所以这里按 app.json 的 tabBar 列表逐条核对。
+    """
+    app_json = json.loads(read(ROOT / "app.json"))
+    tab_paths = {item["pagePath"] for item in app_json["tabBar"]["list"]}
+
+    violations = []
+    for page_dir in sorted((ROOT / "pages").iterdir()):
+        if not page_dir.is_dir():
+            continue
+        js = page_dir / (page_dir.name + ".js")
+        if not js.exists():
+            continue
+        code = strip_js_comments(read(js))
+        for m in re.finditer(r"wx\.(navigateTo|switchTab|redirectTo)\s*\(\s*\{[^}]*url\s*:\s*['\"]([^'\"]+)", code):
+            api, url = m.group(1), m.group(2).lstrip("/")
+            target = url[:-3] if url.endswith(".js") else url
+            is_tab = target in tab_paths
+            if is_tab and api != "switchTab":
+                violations.append(
+                    f"{page_dir.name}.js 用 {api} 打开 tab 页 {url}（应 switchTab）"
+                )
+            if not is_tab and api == "switchTab":
+                violations.append(
+                    f"{page_dir.name}.js 用 switchTab 打开非 tab 页 {url}（应 navigateTo）"
+                )
+
+    if violations:
+        res.fail("tab 页用 switchTab、非 tab 页用 navigateTo", "；".join(violations))
+    else:
+        res.ok("tab 页用 switchTab、非 tab 页用 navigateTo")
+
+
 def check_about_license(res: Result) -> None:
     """
     关于页必须保留版本号与词库版权声明（PRD F10）。
@@ -414,6 +594,9 @@ def main() -> int:
     check_stats_empty_logic(res)
     check_checkin_text(res)
     check_about_license(res)
+    check_tab_navigation(res)
+    check_page_reachable(res)
+    check_tap_target_size(res)
 
     for name in res.checks:
         print(f"  ✓ {name}")

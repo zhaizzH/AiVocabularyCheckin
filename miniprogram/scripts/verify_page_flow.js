@@ -87,7 +87,7 @@ function createCanvasRecorder() {
 /** Storage 用进程内对象模拟，和真机一样按 key 存字符串。 */
 function createWxMock() {
   const storage = new Map();
-  const log = { toasts: [], relaunch: [], switchTab: [], redirectTo: [], requests: [] };
+  const log = { toasts: [], relaunch: [], switchTab: [], navigateTo: [], redirectTo: [], requests: [] };
   let requestOverride = null;
   const canvas = createCanvasRecorder();
 
@@ -165,6 +165,12 @@ function createWxMock() {
     },
     switchTab(opts) {
       log.switchTab.push(opts);
+    },
+    navigateTo(opts) {
+      log.navigateTo.push(opts);
+      // 真实微信里 navigateTo 必带 success/complete 回调；这里同步回调，
+      // 避免调用方依赖回调时挂住
+      if (opts.complete) opts.complete();
     },
     redirectTo(opts) {
       log.redirectTo.push(opts);
@@ -778,16 +784,22 @@ async function main() {
       );
     });
 
-    await test('卡片跳转用 switchTab（tab 页不能用 navigateTo）', () => {
+    await test('tab 页用 switchTab、统计页用 navigateTo', () => {
       const page = loadPage('pages/index/index.js', mock);
       mock.log.switchTab.length = 0;
+      mock.log.navigateTo.length = 0;
       page.goStudy();
       page.goReview();
       page.goStats();
-      assert.strictEqual(mock.log.switchTab.length, 3);
+      // 学习、复习仍是 tab 页 → switchTab
       assert.deepStrictEqual(
         mock.log.switchTab.map(function (o) { return o.url; }),
-        ['/pages/study/study', '/pages/review/review', '/pages/stats/stats'],
+        ['/pages/study/study', '/pages/review/review'],
+      );
+      // 统计已移出 tabBar（微信上限 5 项）→ 普通页 navigateTo
+      assert.deepStrictEqual(
+        mock.log.navigateTo.map(function (o) { return o.url; }),
+        ['/pages/stats/stats'],
       );
     });
   }
@@ -1982,24 +1994,23 @@ async function main() {
       assert.strictEqual(page.data.editingNickname, false);
     });
 
-    await test('三个功能入口 navigateTo 到正确页面', () => {
+    await test('四个功能入口 navigateTo 到正确页面', () => {
       const page = loadPage('pages/me/me.js', mock);
-      mock.log.navTo = mock.log.navTo || [];
-      const urls = [];
-      const origNav = mock.wx.navigateTo;
-      mock.wx.navigateTo = function (opts) { urls.push(opts.url); };
-      try {
-        page.onOpenBooks();
-        page.onOpenReport();
-        page.onOpenAbout();
-      } finally {
-        mock.wx.navigateTo = origNav;
-      }
-      assert.deepStrictEqual(urls, [
-        '/pages/books/books',
-        '/pages/report/report',
-        '/pages/about/about',
-      ]);
+      mock.log.navigateTo.length = 0;
+      page.onOpenBooks();
+      page.onOpenStats();
+      page.onOpenReport();
+      page.onOpenAbout();
+      assert.deepStrictEqual(
+        mock.log.navigateTo.map(function (o) { return o.url; }),
+        [
+          '/pages/books/books',
+          // 统计已移出 tabBar（微信上限 5 项），从「我的」进入
+          '/pages/stats/stats',
+          '/pages/report/report',
+          '/pages/about/about',
+        ],
+      );
     });
 
     await test('退出登录取消时不清 token、不跳转', async () => {

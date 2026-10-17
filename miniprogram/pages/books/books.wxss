@@ -15,7 +15,9 @@
 }
 
 .cat-item {
-  padding: 14rpx 32rpx;
+  /* 分类标签：padding 26*2 + 行高 36 ≈ 88rpx */
+  padding: 26rpx 32rpx;
+  line-height: 36rpx;
   border-radius: 32rpx;
   background: #ffffff;
   color: #666666;
@@ -127,8 +129,9 @@
 
 .book-action {
   flex-shrink: 0;
-  min-width: 120rpx;
-  height: 64rpx;
+  min-width: 140rpx;
+  /* PRD 验收：可点元素高度 ≥88rpx */
+  height: 88rpx;
   border-radius: 32rpx;
   display: flex;
   align-items: center;

@@ -180,6 +180,10 @@ Page({
     wx.navigateTo({ url: '/pages/books/books' });
   },
 
+  onOpenStats() {
+    wx.navigateTo({ url: '/pages/stats/stats' });
+  },
+
   onOpenReport() {
     wx.navigateTo({ url: '/pages/report/report' });
   },

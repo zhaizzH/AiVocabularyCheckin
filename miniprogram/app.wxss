@@ -43,6 +43,10 @@ page {
   border-radius: var(--radius-card);
   padding: 28rpx;
   margin-bottom: 24rpx;
+  /* 卡片常整块可点（如首页三卡），显式保证触控目标高度 ≥88rpx。
+     实际内容远高于此，这里写死是为了不让后续精简内容时把它压小。 */
+  min-height: 88rpx;
+  box-sizing: border-box;
 }
 
 .row {

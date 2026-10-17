@@ -29,7 +29,6 @@
       { "pagePath": "pages/study/study", "text": "学习" },
       { "pagePath": "pages/review/review", "text": "复习" },
       { "pagePath": "pages/mistakes/mistakes", "text": "错题" },
-      { "pagePath": "pages/stats/stats", "text": "统计" },
       { "pagePath": "pages/me/me", "text": "我的" }
     ]
   },

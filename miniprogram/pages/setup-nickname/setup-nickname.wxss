@@ -86,5 +86,7 @@
   font-size: 26rpx;
   color: #999999;
   margin-top: 36rpx;
-  padding: 20rpx;
+  /* PRD 验收：可点元素高度 ≥88rpx（行高 36 + padding 两倍 56） */
+  padding: 28rpx 20rpx;
+  line-height: 36rpx;
 }
