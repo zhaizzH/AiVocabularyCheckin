@@ -161,3 +161,59 @@ async def test_run_report_propagates_timeout():
             await run_report(graph, stats)
     await asyncio.sleep(0.05)
     assert "llm_cancelled" in events
+
+
+# ---------------------------------------------------------------------------
+# 回归：异常映射的两个真实缺陷（2026-10-17 复审发现）
+# ---------------------------------------------------------------------------
+
+
+async def test_cancellation_is_not_translated_into_http_error(settings):
+    """取消（客户端断开 / 服务停机 / 上层 timeout）不得被翻译成 HTTP 状态码。
+
+    历史缺陷：router 用 ``except BaseException`` 捕获，把 ``CancelledError``
+    映射成了 **502 ai_service_llm_failed**，并打出「模型失败」的假 WARNING。
+    更严重的是吞掉取消会破坏 asyncio 取消协议，任务无法终止。
+    """
+    from app.chains.example_chain import build_example_chain as _build
+
+    async def _cancelled(_messages):
+        raise asyncio.CancelledError("client disconnected")
+
+    app = build_test_app(settings)
+    async with running_lifespan(app):
+        app.state.example_chain = _build(
+            RunnableLambda(_cancelled).with_config(run_name="cancelled")
+        )
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            with pytest.raises(asyncio.CancelledError):
+                await client.post(
+                    "/ai/v1/example", json={"word": "abandon", "translation": "v. 放弃"}
+                )
+
+
+async def test_llm_attempt_timeout_maps_to_504(settings):
+    """单次模型尝试超时必须映射 504，而不是 502。
+
+    历史缺陷：``openai.APITimeoutError`` 的 MRO 不含内置 ``TimeoutError``，
+    只判 ``TimeoutError`` 会让真实超时错走 502，``ai_service_timeout``
+    这条稳定 detail 在单次超时时永远不出现。
+    """
+    import openai
+
+    from app.chains.example_chain import build_example_chain as _build
+
+    async def _attempt_timeout(_messages):
+        raise openai.APITimeoutError(request=httpx.Request("POST", "https://api.example.invalid"))
+
+    app = build_test_app(settings)
+    async with running_lifespan(app):
+        app.state.example_chain = _build(
+            RunnableLambda(_attempt_timeout).with_config(run_name="attempt_timeout")
+        )
+        response = await _post(
+            app, "/ai/v1/example", {"word": "abandon", "translation": "v. 放弃"}
+        )
+    assert response.status_code == 504
+    assert response.json()["detail"] == "ai_service_timeout"

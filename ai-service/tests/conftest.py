@@ -127,9 +127,6 @@ def build_test_app(
 
     app = create_app(settings=settings, http_client=client)
 
-    async def _startup_hook() -> None:
-        pass
-
     original_lifespan = app.router.lifespan_context
 
     @asynccontextmanager

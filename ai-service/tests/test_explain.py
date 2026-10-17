@@ -52,8 +52,6 @@ async def test_explain_accepts_empty_wrong_context(settings):
 
 async def test_explain_timeout_maps_to_504(settings):
     """超时必须映射成 504 + 稳定 detail（backend 据此判 5001）。"""
-    from fastapi import HTTPException
-
     async def _timeout(_messages):
         raise TimeoutError("deadline exceeded")
 

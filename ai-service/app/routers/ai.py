@@ -17,7 +17,10 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
+import openai
 from fastapi import APIRouter, HTTPException, Request
 from langchain_core.runnables import Runnable
 
@@ -61,10 +64,17 @@ def _map_exception(exc: BaseException, feature: str, cost_ms: int) -> HTTPExcept
     """把任意异常翻译成稳定 detail 的 HTTPException。
 
     只记录异常类名，**不记录请求体**（含用户学习数据），也不打印堆栈到 stdout。
+
+    ⚠️ 调用方必须**先过滤 ``CancelledError``**（见 ``_handle``）：取消不是失败，
+    既不能映射成 HTTP 状态码，也不能被吞掉——asyncio 的取消协议要求它继续上抛。
     """
     if isinstance(exc, HTTPException):
         return exc
-    if isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
+    # ``openai.APITimeoutError`` 的 MRO 是 APIConnectionError → APIError →
+    # OpenAIError → Exception，**不继承** 内置 ``TimeoutError``（实测）。
+    # 只判 TimeoutError 会让「单次尝试超时」错走 502，而契约里超时必须能
+    # 对外表现为 504 + ai_service_timeout。
+    if isinstance(exc, (TimeoutError, asyncio.TimeoutError, openai.APITimeoutError)):
         logger.warning(
             "ai_service.%s 调用超时 cost_ms=%d detail=%s", feature, cost_ms, ERR_LLM_TIMEOUT
         )
@@ -75,17 +85,32 @@ def _map_exception(exc: BaseException, feature: str, cost_ms: int) -> HTTPExcept
     return llm_failed_error()
 
 
+@asynccontextmanager
+async def _handle(feature: str, started: float) -> AsyncIterator[None]:
+    """把「执行 + 统一异常映射」收敛成一处，避免三个路由各抄一份（易漂移）。
+
+    **取消必须原样上抛**：客户端断开、uvicorn 停机、上层 ``asyncio.timeout`` 都会
+    以 ``CancelledError`` 表达。若像 ``except BaseException`` 那样一并转成 HTTPException，
+    会有三个后果：①把正常取消记成「模型故障」的假 WARNING；②返回 502 让 backend
+    误判供应商故障；③最严重的是吞掉取消会让任务无法终止（破坏 asyncio 取消协议）。
+    """
+    try:
+        yield
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        raise _map_exception(exc, feature, int((time.monotonic() - started) * 1000)) from exc
+
+
 @router.post("/example", response_model=ExampleResponse)
 async def generate_example(payload: ExampleRequest, request: Request) -> ExampleResponse:
     settings = _settings(request)
     started = time.monotonic()
     logger.info("ai_service.example 调用开始 word=%s context=%s", payload.word, payload.context or "-")
-    try:
+    async with _handle("example", started):
         chain = _require_chain(request.app.state.example_chain)
         async with asyncio.timeout(settings.example_timeout_s):
             response = await run_example(chain, payload)
-    except BaseException as exc:  # noqa: BLE001 - 统一翻译后原样抛出
-        raise _map_exception(exc, "example", int((time.monotonic() - started) * 1000)) from exc
     logger.info("ai_service.example 调用完成 cost_ms=%d", int((time.monotonic() - started) * 1000))
     return response
 
@@ -96,12 +121,10 @@ async def generate_explain(payload: ExplainRequest, request: Request) -> Explain
     started = time.monotonic()
     # 只记单词，不记 wrongContext（含用户学习行为）。
     logger.info("ai_service.explain 调用开始 word=%s", payload.word)
-    try:
+    async with _handle("explain", started):
         chain = _require_chain(request.app.state.explain_chain)
         async with asyncio.timeout(settings.explain_timeout_s):
             response = await run_explain(chain, payload)
-    except BaseException as exc:  # noqa: BLE001
-        raise _map_exception(exc, "explain", int((time.monotonic() - started) * 1000)) from exc
     logger.info("ai_service.explain 调用完成 cost_ms=%d", int((time.monotonic() - started) * 1000))
     return response
 
@@ -112,7 +135,7 @@ async def generate_report(payload: ReportRequest, request: Request) -> ReportRes
     build_graph = request.app.state.report_graph_factory
     started = time.monotonic()
     logger.info("ai_service.report 调用开始 studyDays=%d", payload.studyStats.studyDays)
-    try:
+    async with _handle("report", started):
         if build_graph is None:
             raise not_configured_error()
         async with asyncio.timeout(settings.report_timeout_s):
@@ -120,7 +143,5 @@ async def generate_report(payload: ReportRequest, request: Request) -> ReportRes
             # 避免把某个 lifespan 的 client 引用跨轮次缓存。
             graph = build_graph(payload.studyStats)
             response = await run_report(graph, payload.studyStats)
-    except BaseException as exc:  # noqa: BLE001
-        raise _map_exception(exc, "report", int((time.monotonic() - started) * 1000)) from exc
     logger.info("ai_service.report 调用完成 cost_ms=%d", int((time.monotonic() - started) * 1000))
     return response

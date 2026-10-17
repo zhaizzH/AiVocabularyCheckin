@@ -78,7 +78,7 @@ cp .env.example .env                                          # 填入 DEEPSEEK_
 .venv/Scripts/python.exe -m pytest -q
 ```
 
-当前 56 个用例全绿。要求的覆盖点：
+全部用例秒级跑完、不访问外网。要求的覆盖点：
 
 - 契约字段名与三个接口的成功/失败路径；
 - **最终 HTTP 请求体**（MockTransport 离线断言 `response_format` / `thinking` / `max_tokens`）；

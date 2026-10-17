@@ -272,10 +272,19 @@ print('OK: /health 无 key 泄露；三路由已在 OpenAPI 中')
 
 ```bash
 cd /c/workspace/class/AiVocabularyCheckin
-# ① 代码层无数据库痕迹（排除红线测试自身：它按设计必须包含这些禁用词）
-grep -rniE "mysql|pymysql|psycopg|sqlalchemy|sqlite|database" \
-  ai-service/app ai-service/requirements.txt \
-  && echo "FAIL: 代码与依赖清单命中数据库词，逐条排查" || echo "OK: 代码与依赖清单无数据库痕迹"
+# ① 代码层无数据库痕迹（app/ 扫描 + requirements **剔除注释后**扫描）
+grep -rniE "mysql|pymysql|psycopg|sqlalchemy|sqlite|database" ai-service/app \
+  && echo "FAIL: app/ 命中数据库词" || echo "OK: app/ 无数据库痕迹"
+# ⚠ requirements.txt 含一行说明性注释「langchain 1.3.18 不再依赖 SQLAlchemy」，
+#   直接 grep 全文会自我命中，导致闸口永远失败。必须剔除注释后再判。
+PYTHONIOENCODING=utf-8 python -c "
+import pathlib,sys
+deps=[l.split('#',1)[0].strip() for l in pathlib.Path('ai-service/requirements.txt').read_text(encoding='utf-8').splitlines()]
+deps=[l for l in deps if l]
+bad=[l for l in deps if any(k in l.lower() for k in ('mysql','pymysql','psycopg','sqlalchemy','sqlite','database'))]
+print('FAIL:',bad) if bad else print('OK: 依赖清单无数据库包（%d 行已检查）'%len(deps))
+sys.exit(1 if bad else 0)
+"
 # 红线测试文件单独确认：它只含字面量清单，不得有真实驱动 import
 grep -rnE "^\s*(import|from)\s+(mysql|pymysql|psycopg2?|sqlalchemy|sqlite3)" ai-service/ \
   && echo "FAIL: 出现真实驱动 import" || echo "OK: 无驱动 import"
@@ -288,9 +297,11 @@ git ls-files ai-service/ | grep -c "\.env$" ; echo "上值必须为 0"
 grep -rn "print(" ai-service/app && echo "FAIL" || echo "OK: app/ 无 print"
 ```
 
-> ① 原命令会**自我命中** `tests/test_no_database_imports.py`（该文件按设计必须包含禁用词清单），
-> 导致闸口永远无法通过；故扫描范围限定为 `app/` 与 `requirements.txt`，
-> 并用「真实 import 检查」补上全目录覆盖。
+> ① 两条**自我命中**陷阱（均实测踩到，已修命令）：
+> - 扫 `tests/` 会命中 `test_no_database_imports.py`（该文件按设计必须包含禁用词清单）
+>   → 扫描范围限定 `app/`，并用「真实驱动 import 检查」补全目录覆盖；
+> - 扫 `requirements.txt` 全文会命中**说明性注释**「langchain 1.3.18 不再依赖 SQLAlchemy」
+>   → 必须 `split('#')` 剔除注释后只扫真依赖行（12 行）。
 > ② `.env.example` 的占位值**不使用** `sk-` 前缀（用 `your-deepseek-api-key-here`），
 > 测试假 key 集中在 `tests/` 下，一并排除。
 
@@ -359,4 +370,6 @@ DBPASS=<pw> bash backend/scripts/smoke-test.sh     # 需要 8000 不可达
 | 13 | 缺 `asyncio_mode = auto` → 全部 async 用例被 skip、退出码仍 0 | `pytest.ini` 纳入交付物（`research §6.8`） |
 | 14 | 用 `MockTransport` 测超时会得出错误结论（它不实现超时） | 超时必须用真实 socket 验证（`research §6.6`） |
 | 15 | `@app.on_event` 在 starlette 0.41 已弃用 | 用 `lifespan=` 上下文管理器 |
-| 11 | `git check-ignore -q` 在 Windows Git Bash 下实测可用（0=忽略/1=未忽略） | 已实测，见阶段 1 证据表 |
+| 16 | `git check-ignore -q` 在 Windows Git Bash 下实测可用（0=忽略/1=未忽略） | 已实测，见阶段 1 证据表 |
+| 17 | 🔴 `except BaseException` 把 `CancelledError`（客户端断开/停机/上层取消）翻译成 502，并吞掉取消破坏 asyncio 协议 | 必须用 `except Exception`，且**先** `except asyncio.CancelledError: raise`（req 用例 `test_cancellation_is_not_translated_into_http_error`） |
+| 18 | 🔴 `openai.APITimeoutError` **不继承** 内置 `TimeoutError`（MRO 止于 `Exception`）→ 单次尝试超时错走 502 | 超时判据显式包含 `openai.APITimeoutError`（req 用例 `test_llm_attempt_timeout_maps_to_504`） |

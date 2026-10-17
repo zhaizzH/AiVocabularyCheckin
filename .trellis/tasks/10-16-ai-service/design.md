@@ -114,6 +114,9 @@ ai-service/
 │   └── routers/
 │       ├── __init__.py
 │       └── ai.py               # 三个路由（单一 router，前缀 /ai/v1）
+├── scripts/
+│   ├── verify_live.py          # 真实调用三接口：契约字段 + 耗时检查（不读不打印 key）
+│   └── e2e_backend.py          # backend → ai-service 端到端联调脚本
 ├── tests/
 │   ├── conftest.py             # async FakeLLM + ASGI test-client fixture（不起模型网络）
 │   ├── test_health.py
@@ -121,9 +124,10 @@ ai-service/
 │   ├── test_explain.py
 │   ├── test_report.py          # 条件路由、快路径及图编排用例
 │   ├── test_llm_request.py     # JSON mode/thinking 最终请求体
-│   ├── test_deadlines.py       # 请求总 deadline 与取消传播
+│   ├── test_deadlines.py       # 请求总 deadline 与取消传播 + 异常映射回归
 │   ├── test_lifespan.py        # AsyncClient/Runnable 生命周期
 │   ├── test_parsing.py
+│   ├── test_live_deepseek.py   # 真实调用（默认 skip，DEEPSEEK_LIVE_TEST=1 才跑）
 │   └── test_no_database_imports.py   # 红线自动化校验
 ├── pytest.ini                  # asyncio_mode = auto（**必需**，见下）
 ├── requirements.txt            # 锁版本，含 langchain / langgraph 元包（依赖闭包无数据库驱动）
@@ -441,11 +445,15 @@ LLM Runnable（节点函数持有 FakeLLM），无需跑网络；通过调用计
 ### 7.3 异常到 HTTPException 的映射（统一在 router 层）
 
 ```python
-try:
-    return await chain_fn(request)
+async with _handle(feature, started):   # 统一入口，避免三个路由各抄一份
+    ...
+
+# _handle 内部：
+except asyncio.CancelledError:
+    raise                                  # 🔴 取消不是失败，必须原样上抛
 except HTTPException:
     raise                                  # 已是我们构造的稳定错误，原样上抛
-except (TimeoutError, openai.APITimeoutError):
+except (TimeoutError, asyncio.TimeoutError, openai.APITimeoutError):
     raise HTTPException(504, ERR_LLM_TIMEOUT)
 except Exception as exc:
     log.warning(...)                       # 记录异常类名，不记请求体
@@ -454,6 +462,25 @@ except Exception as exc:
 
 **注意**：`except Exception` 之后**必须**抛出，不能吞（spec 禁「吞异常」）。
 这里**只记录、只转换**，不打印堆栈到 stdout（spec 禁 `print`）。
+
+**🔴 三条必须写对的边界（2026-10-17 复审实证，两条曾写错并已修复 + 补回归用例）：**
+
+1. **必须用 `except Exception`，不能用 `except BaseException`**。
+   `asyncio.CancelledError` 在 Python 3.8+ 直接继承 `BaseException`
+   （`issubclass(CancelledError, Exception)` → **False**）。用 `BaseException` 会把
+   「客户端断开 / uvicorn 停机 / 上层 `asyncio.timeout` 取消」翻译成 **502**，
+   打出「模型故障」的假 WARNING；更严重的是吞掉取消会破坏 asyncio 取消协议，
+   任务无法终止。回归用例：`test_cancellation_is_not_translated_into_http_error`。
+
+2. **超时判据必须显式包含 `openai.APITimeoutError`**。
+   实测其 MRO 为 `APITimeoutError → APIConnectionError → APIError → OpenAIError → Exception`，
+   **不含**内置 `TimeoutError`（`issubclass(...)` → **False**），
+   而 `langchain_openai` 抛的 `OpenAITimeoutError` 正是它的子类。
+   只判 `TimeoutError` 会让「单次尝试超时」错走 502，`ai_service_timeout` 这条
+   稳定 detail 在单次超时时永远不会出现。回归用例：`test_llm_attempt_timeout_maps_to_504`。
+
+3. `asyncio.TimeoutError` 在 3.11+ 已是 `TimeoutError` 的别名，列出它只是为了让
+   意图显式（对本机 3.12.7 无行为差异）。
 
 ---
 
@@ -513,11 +540,11 @@ WARN  ai_service.example 调用失败 cost_ms=12030 detail=ai_service_timeout
 | `test_example.py` | async 成功（JSON）/ 围栏 JSON / 空 example → 502 / LLM 抛异常 → 502 |
 | `test_explain.py` | async 成功 / LLM 超时 → 504 / `wrongContext` 空串仍成功 |
 | `test_report.py` | 常规成功（FakeLLM 依次返回分析+正文，断言调用 2 次）/ 无明显错题快速路径（`topMistakeWords=[]` 且 `masteryRate=100`，断言调用 0 次并返回三段非空文案）/ 空错题但掌握度非 100 仍走常规路径 / step1 异常 → 502 / compose 缺失 analysis 时失败 |
-| `test_deadlines.py` | example/explain/report 总 deadline 生效；deadline 取消传播至 Fake Runnable；report 超时时 compose 不启动；无后台模型任务遗留 |
-| `test_lifespan.py` | 重复启动/关闭 FastAPI lifespan；确认共享 AsyncClient 每轮重建并关闭，依赖其的 Runnable/图不跨 lifespan 泄漏；仅连接池/客户端/图可复用，不缓存请求与响应结果 |
+| `test_deadlines.py` | example/explain/report 总 deadline 生效；deadline 取消传播至 Fake Runnable；report 超时时 compose 不启动；无后台模型任务遗留；**异常映射回归**（取消不被翻译成 HTTP 错误、`openai.APITimeoutError` → 504） |
+| `test_live_deepseek.py` | 真实调用三接口（默认 skip，`DEEPSEEK_LIVE_TEST=1` 才跑）：契约字段不多不少、正文非空含中文、耗时在自控预算内；快速路径仍是完整三段 |
+| `test_lifespan.py` | **必须**经 `app.router.lifespan_context(app)` 手动进入；连续两轮起停，断言每轮新建 client、旧 client 已 `aclose()`、图/Runnable 不复用旧 client；仅连接池/客户端/图可复用，不缓存请求与响应结果 |
 | `test_llm_request.py` | 使用 HTTP mock 捕获锁版 `langchain-openai==1.7.2` 最终发出的请求体，无外网；断言顶层 `response_format={"type":"json_object"}` 与顶层 `thinking.type=disabled` 同时存在；覆盖 example/explain 和 report 两个 LLM 节点 |
 | `test_parsing.py` | 纯 JSON / 围栏 / 前后噪声 / 未闭合 / 空串 / 非 dict（数组） |
-| `test_lifespan.py` | **必须**经 `app.router.lifespan_context(app)` 手动进入；连续两轮起停，断言每轮新建 client、旧 client 已 `aclose()`、图/Runnable 不复用旧 client |
 | `test_health.py` | `/health` 200 且不回显 key / `/docs` 200 / OpenAPI 含三路由 |
 | `test_no_database_imports.py` | 遍历 `app/**/*.py` 的 AST import，断言无 `mysql`/`pymysql`/`psycopg`/`sqlalchemy`/`sqlite3`；并断言 `requirements.txt` 无这些包名 |
 
