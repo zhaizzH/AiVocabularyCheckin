@@ -704,3 +704,85 @@ implement.jsonl / check.jsonl。**未写任何 ai-service 代码**（Phase 2 未
 
 - 读 10-16-miniprogram-student 的 prd/design/implement/research 后 task.py start
 - 实跑验证 wx-login：application-local.yml 已有真实 appid/secret，可能不再阻塞
+
+---
+
+## Session 13: 小程序学生端 S1–S10 全部完成与归档（2026-10-17）
+
+### Goal
+
+完成 `10-16-miniprogram-student`（P1）：微信原生小程序学生端 F1–F10，零第三方库，
+六 tabBar（后因平台限制改五 tabBar），12 阶段计划 S1–S10。
+
+### Main Changes
+
+**S1–S2 骨架与登录**
+- 11 个页面四件套、7 个 services、5 个 utils；`utils/request.js` 为唯一网络出口
+- F1 登录/注册双 tab、微信一键登录、首登昵称引导（可跳过）
+
+**S3–S9 十个功能页**
+- F2 首页三卡（`Promise.allSettled` 隔离，卡片失败不污染其他卡）
+- F3 词库分类筛选、加入/移出二次确认
+- F4 学习逐词上报、卡片翻面、AI 例句（`degraded` 黄条）、进入定位第一个未学词
+- F5 打卡（门槛 `finished >= total`，分母用 `plan.total` 不写死 20）
+- F6 复习（SM-2 间隔、最末入完成页、空态「今日没有待复习内容🎉」）
+- F7 错题本（AI 讲解与标记解耦，PRD 硬约束）
+- F8 AI 报告（四种互斥终态，5003 不给重试）
+- F9 统计（84 格热力图 `<view>` + 手绘 canvas 双 y 轴折线）
+- F10 我的 + 关于（emoji 头像 6 选 1、昵称 ≤20 字、BSD 3-Clause 全文）
+
+**S10 全链路验收**
+- 编译器报 PRD 与平台硬冲突：`tabBar.list` 最多 5 项 → 与用户确认去掉「统计」
+  tab，统计改普通页，入口两处（首页快捷入口 + 我的「学习统计」）
+- 新增 3 个验证套件：`verify_e2e_flow.py`(49) / `verify_degraded_flow.py`(16) /
+  `verify_all.py`（一键 8 套件）
+- 新增 4 条静态门禁：`check_about_license` / `check_tab_navigation` /
+  `check_tap_target_size` / `check_page_reachable`
+
+### 修掉的真实缺陷（都不是测试写出来的，是跑出来的）
+
+1. **`ERROR_CODES.PARAM_INVALID` 不存在**（应为 `VALIDATION_FAILED`）——JS 未定义属性
+   静默 undefined，1005 分支永不命中，无学习记录的复习词永久卡列表。
+   为此新增静态门禁扫所有 `ERROR_CODES.X` 引用是否真实存在。
+2. **`advance()` 最后一词 fire-and-forget `loadPlan()`**——用户立刻点打卡时 `finished`
+   还是旧值、按钮假禁用。改 `await`。回归验证：去 `await` → 变红 → 恢复 → 变绿。
+3. **WXML 写 `explainMap[key].prop`**——key 不存在时读 undefined 属性，渲染空面板
+   且无任何报错。改在 JS 拍平（`decorate()` + `syncExplainToList()`）。
+4. **`storage.clearAll` 不存在**（只有 `clearAuth`）。
+5. **13 处可点元素 <88rpx**（PRD 明文验收标准）——模拟器看不出，真机点不中才暴露。
+6. **`.heat-months` 与 `.heat-grid` 列宽不一致**——逐列偏移。
+
+### Testing
+
+- [OK] 静态 18 项 / 接口 76 / 复习 18 / 错题 26 / 报告 11 / 统计 18 / 页面 98 / 全链路 49 = **314 项断言**
+- [OK] 降级验收 16 项（停 ai-service）：F5 `degraded:true` 走 200+`"0"`、F7 报 5001/5002
+      但标记已掌握仍可用、打卡统计全不受影响
+- [OK] 401 防重入：并发 3 请求同时 401 → 只清一次 token、只跳一次登录页、只弹一次 toast
+- [OK] `cli.bat preview` 退出码 0、零错误、产出预览二维码
+- [OK] 所有新门禁均做牙齿验证（注入违规 → 变红 → 恢复 → 变绿）
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `87fc561` | feat(miniprogram): S1 骨架+网络层 & S2 登录链路 F1 |
+| `5ac4950` | feat(miniprogram): S3 首页 F2 + 词库 F3 |
+| `7b9423c` | feat(miniprogram): S4 学习 F4 + 打卡 F5 |
+| `d7fd471` | feat(miniprogram): S5 复习 F6 |
+| `da0be3a` | feat(miniprogram): S6 错题本 F7 + AI 讲解 |
+| `96b8450` | feat(miniprogram): S7 AI 学习报告 F8 |
+| `b1a1aa7` | feat(miniprogram): S8 数据统计 F9 |
+| `8ce3241` | fix(miniprogram): 静态门禁剥注释避免误报 |
+| `636bd49` | feat(miniprogram): S9 我的页与关于页 F10 |
+| `db04913` | chore(miniprogram): 删除误提交的临时补丁脚本 |
+| `87f8892` | feat(miniprogram): S10 全链路验收 + 修 tabBar 平台限制冲突 |
+| `75e6082` | docs(handoff): 小程序任务收尾 |
+
+### Status
+
+[OK] **Completed 并归档**至 `.trellis/tasks/archive/2026-10/10-16-miniprogram-student`
+
+### Next Steps
+
+- `10-16-admin-web`（P2）：React 18 + TS + Vite + AntD 5，4 页，依赖 `/api/admin/**` 10 接口（已就绪）
+- 两项非阻塞待办：真机 `wx-login` 全链路、关于页「第 N 组」文案待用户提供
