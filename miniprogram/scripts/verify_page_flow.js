@@ -1260,6 +1260,217 @@ async function main() {
     });
   }
 
+  // ============================================================ 错题（F7）
+  group('错题本（pages/mistakes）筛选、讲解、标记、移除');
+  {
+    const mock = createWxMock();
+    const m = freshModules(mock);
+
+    // 造 3 条错题：答错的词由后端自动收录
+    const uname = 'mk_' + Math.random().toString(36).slice(2, 10);
+    await m.auth.register({ username: uname, password: 'Test123456' });
+    const login = await m.auth.login({ username: uname, password: 'Test123456' });
+    m.storage.setToken(login.token);
+    const books = await m.book.listBooks('');
+    await m.book.selectBook(books[0].bookId);
+    const plan = await m.study.getPlan();
+    for (let i = 0; i < 3; i++) {
+      await m.study.recordStudy({
+        wordId: plan.words[i].wordId,
+        bookId: plan.words[i].bookId,
+        known: false,
+      });
+    }
+
+    await test('未掌握列表加载并派生来源标签与讲解字段', async () => {
+      const page = loadPage('pages/mistakes/mistakes.js', mock);
+      await page.loadList(true);
+      assert.strictEqual(page.data.tab, 'todo');
+      assert.strictEqual(page.data.total, 3, '应有 3 条错题');
+      assert.strictEqual(page.data.todoTotal, 3, '角标应同步');
+      const it = page.data.list[0];
+      assert.ok(it.word, '应有单词');
+      assert.strictEqual(it.sourceLabel, '学习', '来源 STUDY 应映射为「学习」');
+      assert.strictEqual(it.exLoading, false, '讲解态应拍平进条目');
+      assert.strictEqual(it.exError, '');
+      assert.strictEqual(page.data.loading, false);
+    });
+
+    await test('答错次数累加后 wrongCount 反映真实值', async () => {
+      const page = loadPage('pages/mistakes/mistakes.js', mock);
+      await page.loadList(true);
+      const w = page.data.list[0];
+      // 再答错同一个词一次
+      await m.study.recordStudy({
+        wordId: w.wordId,
+        bookId: books[0].bookId,
+        known: false,
+      });
+      await page.loadList(true);
+      const after = page.data.list.find(function (x) { return x.mistakeId === w.mistakeId; });
+      assert.ok(after.wrongCount > w.wrongCount,
+        'wrongCount 应从 ' + w.wrongCount + ' 增加，实际 ' + after.wrongCount);
+    });
+
+    await test('AI 讲解成功后展开显示，且不影响标记按钮', async () => {
+      const page = loadPage('pages/mistakes/mistakes.js', mock);
+      await page.loadList(true);
+      const mid = page.data.list[0].mistakeId;
+
+      const origReq = mock.wx.request;
+      mock.wx.request = function (opts) {
+        if (opts.url.indexOf('/ai/explain') >= 0) {
+          opts.success({
+            statusCode: 200,
+            data: { code: '0', message: 'ok',
+              data: { mistakeId: mid, explanation: '这是讲解内容', advice: '这是建议', degraded: false } },
+          });
+          return;
+        }
+        origReq.call(mock.wx, opts);
+      };
+      try {
+        await page.onExplain({ currentTarget: { dataset: { id: mid } } });
+        const it = page.data.list[0];
+        assert.strictEqual(it.exExplanation, '这是讲解内容');
+        assert.strictEqual(it.exAdvice, '这是建议');
+        assert.strictEqual(it.exExpanded, true, '拿回讲解应自动展开');
+        assert.strictEqual(it.exLoading, false);
+        assert.strictEqual(page.data.explainingId, null, 'explainingId 应复位');
+        // 讲解不影响列表本身的可用性
+        assert.strictEqual(page.data.total, 3, '讲解不应改变列表');
+      } finally {
+        mock.wx.request = origReq;
+      }
+    });
+
+    await test('讲解失败只显示错误文案，标记已掌握仍可用（PRD F7）', async () => {
+      const page = loadPage('pages/mistakes/mistakes.js', mock);
+      await page.loadList(true);
+      const mid = page.data.list[0].mistakeId;
+
+      const origReq = mock.wx.request;
+      mock.wx.request = function (opts) {
+        if (opts.url.indexOf('/ai/explain') >= 0) {
+          opts.success({ statusCode: 200, data: { code: '5002', message: 'AI 服务异常' } });
+          return;
+        }
+        origReq.call(mock.wx, opts);
+      };
+      try {
+        await page.onExplain({ currentTarget: { dataset: { id: mid } } });
+        const it = page.data.list[0];
+        assert.ok(it.exError, '应显示讲解失败文案');
+        assert.strictEqual(it.exExplanation, '', '失败时不应有讲解内容');
+        assert.strictEqual(page.data.explainingId, null);
+        assert.strictEqual(page.data.list.length, 3, '讲解失败不应影响列表');
+      } finally {
+        mock.wx.request = origReq;
+      }
+
+      // 关键：讲解失败后标记已掌握必须仍然可用
+      await page.onMarkMastered({ currentTarget: { dataset: { id: mid } } });
+      assert.strictEqual(page.data.list.length, 2, '讲解失败后仍能标记已掌握');
+    });
+
+    await test('标记已掌握后从列表移除并同步角标', async () => {
+      const page = loadPage('pages/mistakes/mistakes.js', mock);
+      await page.loadList(true);
+      const before = page.data.total;
+      const doneBefore = await m.mistake.listMistakes({ mastered: 1, page: 1, size: 20 });
+      const mid = page.data.list[0].mistakeId;
+
+      await page.onMarkMastered({ currentTarget: { dataset: { id: mid } } });
+
+      assert.strictEqual(page.data.list.length, before - 1, '应从列表移除');
+      assert.strictEqual(page.data.total, before - 1, 'total 应减 1');
+      assert.strictEqual(page.data.todoTotal, before - 1, '角标应减 1');
+      assert.strictEqual(page.data.pendingId, null, 'pendingId 应复位');
+
+      // 用增量断言而不是写死条数：本组前面的用例也会产生已掌握条目
+      const doneAfter = await m.mistake.listMistakes({ mastered: 1, page: 1, size: 20 });
+      assert.strictEqual(doneAfter.total, doneBefore.total + 1,
+        '已掌握列表应 +1，' + doneBefore.total + ' → ' + doneAfter.total);
+    });
+
+    await test('切到已掌握 Tab 拉取另一份列表并刷新角标', async () => {
+      const page = loadPage('pages/mistakes/mistakes.js', mock);
+      await page.loadList(true);
+      page.onSwitchTab({ currentTarget: { dataset: { tab: 'done' } } });
+      await new Promise(function (r) { setTimeout(r, 1500); });
+
+      assert.strictEqual(page.data.tab, 'done');
+      assert.ok(page.data.list.length >= 1, '已掌握列表应有内容');
+      assert.ok(page.data.list.every(function (x) { return x.mastered === true; }),
+        '已掌握 Tab 不应混入未掌握条目');
+    });
+
+    await test('移除错题需二次确认：取消则不发请求', async () => {
+      const page = loadPage('pages/mistakes/mistakes.js', mock);
+      page.setData({ tab: 'todo' });
+      await page.loadList(true);
+      const mid = page.data.list[0].mistakeId;
+      const before = page.data.list.length;
+
+      let shown = false;
+      mock.wx.showModal = function (opts) {
+        shown = true;
+        if (opts.success) opts.success({ confirm: false, cancel: true });
+      };
+      const reqBefore = mock.log.requests.length;
+
+      await page.onRemove({ currentTarget: { dataset: { id: mid } } });
+
+      assert.ok(shown, '移除必须二次确认');
+      assert.strictEqual(mock.log.requests.length, reqBefore, '取消后不应发请求');
+      assert.strictEqual(page.data.list.length, before, '取消后列表不变');
+    });
+
+    await test('移除错题确认后从列表移除', async () => {
+      const page = loadPage('pages/mistakes/mistakes.js', mock);
+      page.setData({ tab: 'todo' });
+      await page.loadList(true);
+      const before = page.data.list.length;
+      const mid = page.data.list[0].mistakeId;
+
+      mock.wx.showModal = function (opts) {
+        if (opts.success) opts.success({ confirm: true });
+      };
+      await page.onRemove({ currentTarget: { dataset: { id: mid } } });
+
+      assert.strictEqual(page.data.list.length, before - 1, '应移除一条');
+      assert.strictEqual(page.data.pendingId, null, 'pendingId 应复位');
+    });
+
+    await test('未掌握为空时显示专属空态文案', async () => {
+      // 把所有未掌握的标记掉
+      const left = await m.mistake.listMistakes({ mastered: 0, page: 1, size: 50 });
+      for (const it of left.list) {
+        await m.mistake.markMastered(it.mistakeId);
+      }
+
+      const page = loadPage('pages/mistakes/mistakes.js', mock);
+      await page.loadList(true);
+      assert.strictEqual(page.data.total, 0);
+      assert.strictEqual(page.data.list.length, 0);
+      assert.strictEqual(page.data.todoTotal, 0, '角标应清零');
+      assert.strictEqual(page.data.errorMsg, '', '空态不是错误');
+    });
+
+    await test('加载失败时给出错误文案且 loading 复位', async () => {
+      const page = loadPage('pages/mistakes/mistakes.js', mock);
+      const origReq = mock.wx.request;
+      mock.wx.request = function (opts) { opts.fail({ errMsg: 'request:fail timeout' }); };
+      try {
+        await page.loadList(true);
+        assert.ok(page.data.errorMsg, '应有错误文案');
+        assert.strictEqual(page.data.loading, false);
+      } finally {
+        mock.wx.request = origReq;
+      }
+    });
+  }
+
   // ============================================================ 完整性
   group('全部 wx.request 均经 request.js 发出');
   {

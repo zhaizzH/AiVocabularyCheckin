@@ -1,6 +1,105 @@
-<view class="page-wrap">
-  <view class="empty">
-    <view class="empty-title">错题本</view>
-    <view class="empty-desc">待实现</view>
+<view class="page-wrap mistakes-page">
+  <!-- 筛选 Tab -->
+  <view class="tab-bar">
+    <view
+      class="tab-item {{tab === 'todo' ? 'tab-active' : ''}}"
+      data-tab="todo"
+      bindtap="onSwitchTab"
+    >
+      <text>未掌握</text>
+      <view class="badge" wx:if="{{todoTotal > 0}}">{{todoTotal}}</view>
+    </view>
+    <view
+      class="tab-item {{tab === 'done' ? 'tab-active' : ''}}"
+      data-tab="done"
+      bindtap="onSwitchTab"
+    >已掌握</view>
   </view>
+
+  <view class="loading-tip" wx:if="{{loading}}">加载中…</view>
+
+  <view class="error-box" wx:elif="{{errorMsg}}">
+    <view class="error-text">{{errorMsg}}</view>
+  </view>
+
+  <!-- 空态 -->
+  <view class="empty" wx:elif="{{list.length === 0}}">
+    <view class="empty-icon">🌟</view>
+    <view class="empty-title" wx:if="{{tab === 'todo'}}">太棒了，错题本空空如也</view>
+    <view class="empty-title" wx:else>还没有已掌握的错题</view>
+    <view class="empty-desc" wx:if="{{tab === 'todo'}}">答错的词会自动出现在这里，AI 帮你讲解</view>
+    <view class="empty-desc" wx:else>掌握一个错题后会在这里留档</view>
+  </view>
+
+  <block wx:else>
+    <view class="mistake-item" wx:for="{{list}}" wx:key="mistakeId">
+      <view class="item-main">
+        <view class="item-head">
+          <text class="item-word">{{item.word}}</text>
+          <text class="item-phonetic" wx:if="{{item.phonetic}}">{{item.phonetic}}</text>
+        </view>
+
+        <!-- 释义一行截断 -->
+        <view class="item-translation ellipsis-1">{{item.translation}}</view>
+
+        <view class="item-meta">
+          <text class="meta-wrong">错 {{item.wrongCount}} 次</text>
+          <text class="tag tag-sm">{{item.sourceLabel}}</text>
+        </view>
+      </view>
+
+      <!-- 三个操作 -->
+      <view class="item-actions">
+        <view
+          class="act-btn act-ai {{explainingId === item.mistakeId ? 'act-busy' : ''}}"
+          data-id="{{item.mistakeId}}"
+          bindtap="onExplain"
+        >{{item.exExplanation ? (item.exExpanded ? '收起讲解' : '查看讲解') : 'AI 讲解'}}</view>
+
+        <view
+          class="act-btn act-done {{pendingId === item.mistakeId ? 'act-busy' : ''}}"
+          wx:if="{{tab === 'todo'}}"
+          data-id="{{item.mistakeId}}"
+          bindtap="onMarkMastered"
+        >标记已掌握</view>
+
+        <view
+          class="act-btn act-remove {{pendingId === item.mistakeId ? 'act-busy' : ''}}"
+          data-id="{{item.mistakeId}}"
+          bindtap="onRemove"
+        >移除</view>
+      </view>
+
+      <!-- 讲解区（条目内展开） -->
+      <view
+        class="explain-panel"
+        wx:if="{{item.exLoading || item.exError || (item.exExpanded && item.exExplanation)}}"
+        data-id="{{item.mistakeId}}"
+        catchtap="onCollapseExplain"
+      >
+        <!-- 骨架屏：AI 最慢 30 秒，没有占位用户会以为没反应 -->
+        <block wx:if="{{item.exLoading}}">
+          <view class="sk-line sk-w80"></view>
+          <view class="sk-line sk-w95"></view>
+          <view class="sk-line sk-w60"></view>
+        </block>
+
+        <block wx:elif="{{item.exError}}">
+          <view class="explain-error">{{item.exError}}</view>
+        </block>
+
+        <block wx:else>
+          <view class="explain-label">讲解</view>
+          <view class="explain-text">{{item.exExplanation}}</view>
+          <block wx:if="{{item.exAdvice}}">
+            <view class="explain-label">建议</view>
+            <view class="explain-text">{{item.exAdvice}}</view>
+          </block>
+        </block>
+      </view>
+    </view>
+
+    <view class="load-more" wx:if="{{loadingMore}}">加载更多…</view>
+    <view class="load-more" wx:elif="{{!hasMore && list.length > 0}}">没有更多了</view>
+  </block>
 </view>
