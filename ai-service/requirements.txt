@@ -1,0 +1,19 @@
+# Web framework
+fastapi==0.115.5
+uvicorn==0.32.0
+pydantic==2.9.2
+pydantic-settings==2.6.1
+
+# LLM stack (langchain 1.x baseline, pinned per project requirement).
+# NOTE: langchain 1.3.18 does not depend on SQLAlchemy (only 0.3.x did).
+# Its dependency closure contains no database driver at all.
+langchain==1.3.18
+langchain-core==1.6.12
+langchain-openai==1.7.2
+langgraph==1.2.16
+openai==3.33.0
+
+# Tests
+pytest==8.3.3
+pytest-asyncio==0.24.0
+httpx==0.28.1

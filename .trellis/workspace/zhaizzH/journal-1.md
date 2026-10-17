@@ -541,3 +541,123 @@ Session summary was not supplied.
 
 - ai-service 子任务：DeepSeek key 到位后补 AI 成功路径端到端验证
 - miniprogram 学生端 / admin-web 管理端为独立子任务（planning）
+
+## Session 10: ai-service 规划（Phase 1 完成）
+<!-- trellis-session: v=2 fp=ai-service-planning-2026-10-17 -->
+
+**Date**: 2026-10-17
+**Task**: 10-16-ai-service（AI 微服务）
+**Branch**: `main`
+
+### Summary
+
+恢复 ai-service 子任务：补全 Phase 1 规划产物（原仅有 task.json + 空 prd.md），
+完成 DeepSeek 供应商与 langchain 依赖的实测研究，产出 design.md / implement.md /
+implement.jsonl / check.jsonl。**未写任何 ai-service 代码**（Phase 2 未启动）。
+
+### Main Changes
+
+- `research/01-deepseek-and-deps.md`（新建，360 行）：DeepSeek 现状 + 依赖闭包 + backend 消费口径实测
+- `prd.md`（重写）：补 A 段（静态，不依赖 key）/ B 段（真实生成路径）/ C 段（与 backend 契约对齐）验收标准
+- `design.md`（新建，480 行）：边界/契约/结构/配置/LLM 客户端/编排/错误/日志/测试/锁版/风险
+- `implement.md`（新建，321 行）：12 阶段顺序清单 + 每阶段验证命令与闸口 + 回滚点 + 11 条已知陷阱
+- `implement.jsonl` / `check.jsonl`：各 9 条上下文清单，`task.py validate` 通过
+
+### Key Decisions
+
+1. **版本基线 = `langchain 1.3.18`（用户指定）**：全家族升 1.x（core 1.6.12 / openai 1.7.2 / openai-sdk 3.33.0）。
+2. **🔴 关键更正：1.x 的 `langchain` 元包不再依赖 SQLAlchemy**。
+   实测 `langchain==1.3.18` 闭包 39 包逐名筛查数据库包 → NONE；
+   依赖 SQLAlchemy 的是 **0.3.x**（`SQLAlchemy>=1.4,<3`）。
+   → 原「必须避开元包」的结论**被推翻**，按用户要求正常安装 `langchain` + `langgraph`，红线依然成立。
+3. **`langgraph 1.2.16` 是 langchain 1.3.18 的必需依赖**，仅用于 report 的多步编排
+   （`StateGraph` + `TypedDict(total=False)`，node: digest→analyze→compose）；example/explain 保持 LCEL 单链。
+4. **隔离 venv 验证**（本机全局是旧 `langchain 0.3.7`，不可顶替）：
+   venv 内装 1.x 栈 EXIT=0，`SQLAlchemy` NOT INSTALLED，`StateGraph` 实跑通过。
+5. **模型 `deepseek-flash`**（`deepseek-chat` 已于 2026-07-24 退役）+ **thinking 默认 disabled**
+   （官方默认开启且与 `json_object` 冲突 → 空 content）。
+6. 真实 key 注入方式：**写入 `ai-service/.env`**（用户选定；已实测被 gitignore）。
+7. 本任务**包含真实端到端验收**（三接口真实调用 + backend 联调 `degraded:false`）。
+
+### Testing
+
+- [OK] `git check-ignore -q ai-service/.env` → exit 0（被忽略）；`.env.example` → exit 1（可入库）
+- [OK] venv 装 `langchain 1.3.18` + `langchain-openai 1.7.2` + FastAPI 栈 → EXIT=0
+- [OK] venv 内 `SQLAlchemy` NOT INSTALLED；4 个 langchain 包的 `requires()` 无数据库依赖
+- [OK] `langgraph.graph.StateGraph` invoke/ainvoke 实跑通过
+- [OK] LCEL `prompt | fake | StrOutputParser()` sync+async 实跑通过
+- [OK] `task.py validate 10-16-ai-service` → implement.jsonl ✓ (9) / check.jsonl ✓ (9)
+- [INFO] 未运行 ai-service 代码（尚不存在）
+
+### Status
+
+[PARTIAL] **Phase 1 规划完成**；Phase 2 待评审闸口后 `task.py start` 激活。
+
+### Next Steps
+
+- 等用户确认规划（评审闸口）→ `task.py start 10-16-ai-service`（status → in_progress）
+- 索取 DeepSeek key 实际值 → 写入 `ai-service/.env`
+- 按 `implement.md` 阶段 1-9 实施；阶段 7-8 做真实调用与 backend 联调
+
+---
+
+## Session 11 — ai-service 实施完成（2026-10-17 12:00–12:20）
+
+### Goal
+
+按已修订的 design/implement 文档实施 `ai-service`（FastAPI + LangChain 1.3.18 + LangGraph + DeepSeek），
+并完成真实 key 的端到端验收（阶段 7/8）。
+
+### Decisions
+
+1. **`max_tokens` 走 `extra_body`**：`langchain-openai 1.7.2` 把构造参数 `max_tokens=`
+   改名成 `max_completion_tokens`，DeepSeek 不认；MockTransport 实测最终 body 顶层键为
+   `['max_tokens','messages','model','response_format','stream','thinking']`。
+2. **`create_app(*, settings=None, http_client=None)` 工厂**：lifespan 内建 `httpx.AsyncClient`，
+   测试注入 MockTransport；退出时 `aclose()` 并清空依赖它的 chain 引用。
+3. **`DEEPSEEK_API_KEY: SecretStr | None = None`**：缺 key 不崩启动，`/health` 报
+   `llmConfigured:false`，调用期 503。
+4. **langgraph 只给 report**：digest（纯 Python）→ 条件路由 → analyze → compose；
+   example/explain 保持单步 LCEL。
+5. **report 快速路径语义**：`topMistakeWords=[]` **且** `masteryRate==100` 才 0 次 LLM，
+   文案写死「暂无明显薄弱错题」，禁止夸大成「已掌握全部内容」。
+6. **`pytest.ini` 必须含 `asyncio_mode = auto`**：否则 async 用例静默 skip 且退出码 0（假绿）。
+7. **lifespan 测试用 `app.router.lifespan_context(app)`**：裸 `ASGITransport` 不跑 lifespan。
+
+### Implementation
+
+- 35 个文件：`app/{main}.py`、`core/{config,logging,llm,errors}.py`、
+  `schemas/{common,example,explain,report}.py`、
+  `chains/{prompts,parsing,example_chain,explain_chain,report_graph}.py`、
+  `routers/ai.py`、`tests/`（9 个测试文件）、`scripts/{verify_live,e2e_backend}.py`、
+  `requirements.txt`、`pytest.ini`、`.env.example`、`README.md`。
+- 依赖闭包 55 包，**DB 包为 NONE**（红线：AST 扫描 + requirements 断言双保险）。
+
+### Testing
+
+- [OK] `pytest -q` → **58 passed**（含真实 HTTP body 断言、deadline 取消、lifespan 两轮、
+  解析容错矩阵、report 条件路由、架构红线）
+- [OK] 红线测试有牙齿：临时插入 `import sqlalchemy` → 测试失败（已回滚）
+- [OK] 真实 key 三接口：example 1.1s / explain 3.7s / report 2.4s（预算 12/25/50s）
+- [OK] backend 端到端：`example`/`explain`/`report` 全部 `code:"0"` + `degraded:false`
+- [OK] 反证（停 ai-service）：`example` → `degraded:true` + 兜底例句；
+  `explain`/`report` → `5002`
+- [OK] 日志零泄漏（无 key / 无请求体 / 无 wrongContext）
+- [OK] 数据清理：g5 用户清零；`ai_vocab` 7 表 / `word` 22761 / `word_book` 3；
+  `anime_tracker` 20 表未动
+
+### Discovered Bug（测试抓到的真实缺陷）
+
+缺 key 时 `lifecycle` 把 chain 置为 `None`，router 直接调用导致 `AttributeError`
+被泛化成 **502**（而非 503）。已修：新增 `_require_chain()` 显式抛
+`not_configured_error()`，并补两条走真实 lifespan 的回归测试。
+
+### Status
+
+[DONE] 阶段 1–8 全部完成；`implement.md` 37 条全部勾选。
+待提交（用户选择阶段 7/8 都过后一次性提交）。
+
+### Next Steps
+
+- 更新 `handoff.md` 中 ai-service 状态
+- 一次性提交（确认 `git show --stat` 无 `.env`、无 `docs/` 既有删除）

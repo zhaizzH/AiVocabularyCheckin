@@ -1,0 +1,10 @@
+{"file": "docs/接口详细设计.md", "reason": "字段级冻结契约（唯一事实源）：§9 三个内部 AI 接口的路径、请求/响应字段逐字口径；§6 降级与 5001/5002 界线；§0 通用约定"}
+{"file": ".trellis/spec/backend/index.md", "reason": "后端规范入口：五份规范索引与编写代码前必读清单（本任务适用其中 ai-service 相关部分）"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "ai-service/ 目录布局与命名规范：routers/chains/schemas/core 分层、Python 命名（snake_case 模块、XxxRequest/XxxResponse 模型）；以及「backend 是唯一允许调 ai-service 的服务」「ai-service 绝不连 MySQL」两条架构红线"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "禁用/必须模式：禁 print()、禁裸 except、禁可变默认参数、requirements.txt 必须锁版本、每个路由必须有类型化 Pydantic 模型（不接受裸 dict）"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "ai-service 侧错误约定：抛 HTTPException、detail 用稳定字符串；backend 把一切 AI 侧失败映射为 5xxx（本任务据此设计错误表）"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Python logging 规范：格式 %(asctime)s %(levelname)s %(name)s %(message)s 在 core/ 统一配置一次；每次 AI 调用记录功能名+耗时+结果；禁记 key/token/请求体"}
+{"file": ".trellis/tasks/10-16-ai-service/research/01-deepseek-and-deps.md", "reason": "外部事实与依赖锁版依据：LangChain 1.x 依赖闭包无数据库包、DeepSeek 模型与 thinking/JSON mode 行为、ChatOpenAI 请求参数和 SDK 扩展字段、backend 侧消费口径与 DTO 字段名"}
+{"file": ".trellis/tasks/10-16-ai-service/prd.md", "reason": "需求与验收：JSON mode 与 thinking 约束、report 快速路径、异步总 deadline、HTTP 请求体测试、真实调用和 backend 契约验收"}
+{"file": ".trellis/tasks/10-16-ai-service/design.md", "reason": "技术设计：边界与数据流、请求宽松度策略、JSON mode 与禁用 thinking、请求总 deadline 与单次 LLM timeout 分离、报告 StateGraph 条件快速路径、解析容错、稳定 detail 常量表与异常映射"}
+{"file": ".trellis/tasks/10-16-ai-service/implement.md", "reason": "执行计划：异步与请求总 deadline、JSON 请求体测试、条件路由快路径、阶段验证命令与闸口、真实 key 与 backend 联调、回滚点及已知陷阱"}

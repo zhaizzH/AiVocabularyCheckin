@@ -1,0 +1,10 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "评审清单：禁 print/裸 except/可变默认参数、requirements.txt 锁版本、每路由类型化 Pydantic 模型、代码与日志无密钥"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "核对失败路径：HTTPException 是否使用稳定 detail、是否误返回 200+半截文本、错误是否被吞掉"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "核对日志：格式是否符合规范、是否记录功能名与耗时、是否泄露 key/wrongContext/请求体"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "核对目录与命名、以及「ai-service 绝不连 MySQL」红线是否被破坏"}
+{"file": "docs/接口详细设计.md", "reason": "逐字段 diff 的比对基准：§9 三接口路径与请求/响应字段名、§6 降级与 5001/5002 界线"}
+{"file": ".trellis/tasks/10-16-ai-service/prd.md", "reason": "验收标准权威来源：A 段静态检查、B 段真实生成路径、C 段与 backend 契约对齐，逐条核验"}
+{"file": ".trellis/tasks/10-16-ai-service/prd.md", "reason": "核验需求验收标准：三接口 JSON mode 请求体、thinking 关闭、请求级 deadline 和取消、report 确定性快速路径、真实供应商调用及 backend 契约"}
+{"file": ".trellis/tasks/10-16-ai-service/design.md", "reason": "核对实现是否偏离设计：JSON mode 与 thinking disabled 的最终请求体、请求总 deadline 与单次 LLM timeout、报告 StateGraph 条件快速路径、解析容错、稳定错误映射"}
+{"file": ".trellis/tasks/10-16-ai-service/research/01-deepseek-and-deps.md", "reason": "外部事实核对基准：模型名、thinking 与 json_object 的冲突、依赖闭包红线、backend 侧 DTO 字段名与 wrongContext 真实语义"}
+{"file": ".trellis/tasks/10-16-aivocab-fullstack/prd.md", "reason": "父任务跨子任务验收标准：契约一致性、包装与错误码、AI 降级一等约束、鉴权与安全（红线 grep 验证）"}
