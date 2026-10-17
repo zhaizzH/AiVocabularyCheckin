@@ -35,7 +35,8 @@ CHROME_CANDIDATES = [
 APP_URL = "http://localhost:5173"
 ADMIN_USER = "admin"
 ADMIN_PASS = "Admin@12345"
-PROBE_USER = "vbrowser_probe"
+# 后端用户名校验 ^[A-Za-z0-9_]{4,20}$：前缀 + 后缀必须 <= 20
+PROBE_USER = "vbr_"
 PROBE_PASS = "Probe12345"
 
 passed = 0
@@ -155,11 +156,12 @@ def api(path, data=None, token=None, method=None):
 
 
 def ensure_probe_user():
-    """确保存在一个普通用户用于「非管理员被拒」的验证。"""
+    """每次运行都新建一个普通用户（随机名，避免被历史清理影响）。"""
+    name = PROBE_USER + os.urandom(4).hex()  # vbr_ + 8 位 hex = 12 位，安全
     api("/api/client/auth/register",
-        {"username": PROBE_USER, "password": PROBE_PASS, "nickname": "浏览器探针"})
+        {"username": name, "password": PROBE_PASS, "nickname": "浏览器探针"})
     st, r = api("/api/client/auth/login",
-                {"username": PROBE_USER, "password": PROBE_PASS})
+                {"username": name, "password": PROBE_PASS})
     if r.get("code") == "0":
         return (r.get("data") or {}).get("token")
     return None
@@ -272,7 +274,8 @@ def main() -> int:
             ("表头「累计打卡」", "累计打卡"),
             ("表头「状态」", "状态"),
             ("搜索框「搜索用户名」", "搜索用户名"),
-            ("渲染出真实用户行", "mp_probe01"),
+            # 用户表格里必然有 admin（且探针用户也在）；不依赖历史遗留的特定账号名
+            ("渲染出真实用户行", "admin"),
             ("无渲染崩溃", "Unexpected Application Error"),
         ):
             if label == "无渲染崩溃":

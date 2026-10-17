@@ -786,3 +786,111 @@ implement.jsonl / check.jsonl。**未写任何 ai-service 代码**（Phase 2 未
 
 - `10-16-admin-web`（P2）：React 18 + TS + Vite + AntD 5，4 页，依赖 `/api/admin/**` 10 接口（已就绪）
 - 两项非阻塞待办：真机 `wx-login` 全链路、关于页「第 N 组」文案待用户提供
+
+
+## Session 14: 管理端 admin-web S1–S7 完成并归档（4 页 / 225 断言 / 修无限重渲染真缺陷）
+<!-- trellis-session: v=2 fp=4302bf7b9a9acf71 -->
+
+**Date**: 2026-10-17
+**Task**: 管理端 admin-web S1–S7 完成并归档（4 页 / 225 断言 / 修无限重渲染真缺陷）
+**Branch**: `main`
+
+### Summary
+
+React18+TS+Vite+AntD5+axios 管理端 4 路由页；5 套验证脚本共 225 项断言（静态47/真源码27/真接口61/浏览器渲染38/CDP真实点击52）；tsc -b 零错误、build 通过；发现并修复 useSyncExternalStore 无限重渲染缺陷。
+
+### Main Changes
+
+- 登录页：非 ADMIN 不落 token（避免半个登录态导致后续全 403）
+- 词库页：列表/删除/JSONL 导入 + 单词管理弹窗（同弹窗视图切换，避免双层 Modal）
+- 用户页：分页/搜索/禁用启用；ADMIN 行 disabled；不做后端不支持的状态筛选
+- 监控页：4 StatCard + 按功能拆分 + 降级事件；successRate 不乘 100
+- utils/request.ts：axios 拦截器双路 code 分流（1006/1003 清 token、1007 只跳转不清）
+- 修 useSyncExternalStore 快照返回新对象导致 Maximum update depth 白屏
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e464326` | feat(admin): React 管理端 4 页 + 5 套验证（225 项断言） |
+
+### Testing
+
+- [OK] verify_admin_web.py 47 项静态门禁（全部牙齿验证）
+- [OK] verify_admin_frontend.py 27 项直接执行真实 TS 源码（esbuild + Node）
+- [OK] verify_admin_api.py 61 项打真后端
+- [OK] verify_admin_browser.py 38 项 headless Chrome 渲染
+- [OK] verify_admin_e2e.py 52 项 CDP 真实点击（含 JSONL 上传与用户禁用联动）
+- [OK] tsc -b 零错误；npm run build 通过（843KB chunk 警告为 AntD 全量，已记录为已知取舍）
+
+### 修掉的真实缺陷（脚本跑到才发现的，文档抄不来）
+
+1. **`useSyncExternalStore` 快照返回新对象 → 无限重渲染 → 整页白屏**
+
+   `useAuth` 里原本写 `useSyncExternalStore(subscribe, getUserInfo)`，而
+   `getUserInfo()` 内部 `JSON.parse` 每次都产生**新对象引用**。React 用 `Object.is`
+   比较快照，永远判定「已变化」→ 无限 setState → 报
+   `Maximum update depth exceeded`，整个管理端白屏。
+
+   **修法**：快照函数改为返回 localStorage 里的**原始字符串**
+   （`getUserRaw`），字符串相等天然稳定；再用 `useMemo` 按字符串解析出对象。
+   这样下游 `useEffect` 的依赖数组也不会抖。
+
+   **为什么门禁没抓到**：47 项静态检查全绿、27 项真实源码断言全绿、`tsc -b`
+   零错误、`npm run build` 通过 —— 全都抓不到，因为它不是类型错误也不是逻辑
+   错误，是 React 运行时的比较语义。**只有真实浏览器渲染才能暴露**。
+
+   已补一条静态门禁：扫描**全部** `useSyncExternalStore(subscribe, X)` 调用，
+   任何一处 X 为 `getUserInfo`/`getUser` 即红。注意必须取全部匹配——只取第一个
+   会漏（第一处是 `getToken`，本来就安全）。
+
+2. **CDP 按文本点按钮会点到外层 `div`**
+
+   AntD 的 `<Form.Item>` 结构是
+   `div.form-item > div.row > div.col > div.content > button > span`，
+   **六层 `textContent` 完全相同**。按「textContent === 目标文案」找元素会命中
+   最外层 `div`，`click()` 不触发提交，表现为「点了没反应」。
+
+   **修法**：选择器限定 `button, a, .ant-dropdown-menu-item, .ant-popconfirm button`。
+
+3. **AntD `Select` 必须派发 `mousedown` 才展开**
+
+   `click()` 和 `mouseup` 都不行，`rc-select` 监听的是 `mousedown`。展开后
+   选项是 `.ant-select-item-option` 而非 `button`。不展开就拿不到值，表单
+   `required` 校验会静默拦住提交（`onFinish` 根本不执行）。
+
+4. **`textarea` 的 value setter 不能取自 `HTMLInputElement.prototype`**
+
+   React 受控输入要走原生 setter + 派发 `input` 事件。但 `textarea` 与 `input`
+   是**不同类**，`Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,
+   'value').set.call(textareaEl, v)` 会抛 `TypeError`。必须按 `tagName` 选
+   `HTMLTextAreaElement.prototype`。
+
+5. **等待条件用了「预览里就存在的文案」→ 假通过**
+
+   断言「导入完成」原本等 `innerText.includes('跳过 1')`，但**上传预览的
+   Alert 里本来就有「跳过 1 行」**，于是 `wait_for` 立刻返回真，而实际上导入
+   按钮根本没点成功。改为等结果栏独有的「导入成功」标题。
+
+   教训：**wait_for 的条件必须是「目标状态独有」的**，不能是「过程状态里也
+   出现过的」文案。
+
+### 验收实测数据（真实后端，非 mock）
+
+- 词库：四级 7,508 / 六级 5,651 / 考研 9,602，合计 22,761
+- 监控：AI 调用 85 次 → 成功率 92.9% → 降级 6 次 → 注册用户 354
+- 降级反证：停 ai-service 后调 `/api/client/ai/example` →
+  `totalCalls 85→86`、`degradedCount 6→7`、`successRate 92.9→91.9`、
+  新事件 `reason=ERROR` / `result=返回库内例句`，前端 `degraded:true` 仍 200
+- 导入：3 行（2 好 1 坏）→ 前端预览「共 3 行，可解析 2 行，跳过 1 行」→
+  导入结果「成功导入 2 条，跳过 1 条」→ 后端新词书 `wordCount == 2`（坏行真被跳过）
+- 禁用联动：disabled 某用户 → 其旧 token 请求立即 HTTP 401 + `code "1003"`
+
+### Status
+
+[OK] **Completed 并归档**至 `.trellis/tasks/archive/2026-10/10-16-admin-web`
+
+### Next Steps
+
+- S4 交付文档 docs/部署说明.md（唯一剩余工作）
+- 非阻塞：真机 wx-login 全链路、关于页「第 N 组」文案

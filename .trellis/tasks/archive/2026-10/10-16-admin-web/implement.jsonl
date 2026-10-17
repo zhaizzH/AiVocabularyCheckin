@@ -1,0 +1,8 @@
+{"file": "docs/接口详细设计.md", "reason": "字段级冻结契约（唯一事实源）：§8.1-8.10 管理模块 11 个接口（books 列表/导入/删除、words 分页/增查改删、users 列表/状态、monitor/ai-stats），含 §0 通用约定（Result 包装 code 为字符串 '0'、401/1006、403/1007、分页参数）"}
+{"file": "docs/prototype/admin-prototype.html", "reason": "管理端四页视觉与交互参照：登录页、词库表格（名称/分类/单词数/创建时间/操作）、单词弹窗、用户表格（禁用/启用）、监控统计卡 + 降级事件表；JSONL 导入的「预览前 20 行 → 确认 → 成功 N 条跳过 M 条」交互"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "frontend/ 目录布局与命名：src/pages + src/services + src/hooks + src/types + src/utils；硬约束——网络请求只写 services 层、统一走 utils/request、组件用 PascalCase、目录一律小写"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "TS 类型约定：strict 模式、types/ 按后端资源分文件并与 DTO 同名、Result<T> 在 types/common.ts 定义一次；禁用 any / as 断言绕过 / @ts-ignore；枚举用联合字面量类型"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "组件规范：何时抽组件、props 约定、样式方式；本任务表格/弹窗/表单复用 AntD，不自建设计系统"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "hooks 规范：自定义 hooks 封装页面数据请求（useWordBanks 等）；服务端数据不进全局状态，按需请求"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "状态管理准则：跨组件少量状态用 useContext，服务端数据不进全局状态，按页面按需请求"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "质量规范：禁用/必须模式、测试要求、评审清单（无 any 滥用、services 外无裸 fetch/axios、build 通过）"}

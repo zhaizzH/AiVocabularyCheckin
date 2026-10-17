@@ -1,18 +1,20 @@
-# HANDOFF — AI 单词学习打卡小程序（S4 程序包）
+# HANDOFF — AI 单词学习打卡（四端：后端 / ai-service / 小程序 / 管理端）
 
 > 交接文档 · 最后更新 2026-10-17
-> 仓库根：`C:\workspace\class\AiVocabularyCheckin` · 分支 `main` · HEAD `87f8892`
+> 仓库根：`C:\workspace\class\AiVocabularyCheckin` · 分支 `main`
 
 ---
 
 ## 1. 一句话现状
 
-**四端系统中，P0 业务后端、P1 `ai-service/`、P1 `miniprogram/` 均已完成；只剩 P2 `admin-web/` 未开工。**
+**P0 业务后端、P1 `ai-service/`、P1 `miniprogram/`、P2 `frontend/`（管理端）全部完成；只剩交付文档待补。**
 
 - **backend**：33 个对外接口全部实现、7 张表 SQL 就绪、三本种子词书已导入真库（22761 词）、7 道闸口 G1–G7 全部通过、单测基线 **326 tests / 0 failures / 0 errors**。任务 `10-16-backend-api` 已归档。
-- **ai-service**：35 文件 + 单测 60 passed / 4 skipped / 依赖闭包 55 包且 **DB 包为 0**；三接口真实 key 实测约 1.0s / 3.5s / 2.4s（预算 12/25/50s）；与 backend 端到端 `degraded:false` 已验，停服反证回到 `degraded:true` / `5002`；复审修复了 `except BaseException` 吞取消、`APITimeoutError` 误映射 502 两处缺陷并各补回归用例。
+- **ai-service**：35 文件 + 单测 60 passed / 4 skipped；三接口真实 key 实测约 1.0s / 3.5s / 2.4s（预算 12/25/50s）；停服反证降级 `degraded:true` / `5002` 已验。
+- **miniprogram**：19 个验证脚本 / 314 断言 + 98 项页面流断言 + 16 项降级断言，编译零错误，任务已归档。
+- **管理端 `frontend/`**：React 18 + TS + Vite + AntD 5，4 个路由页；**5 套验证脚本共 225 项断言全部通过**（其中 52 项是 Chrome 真实点击驱动，38 项是真实浏览器渲染，27 项直接执行 TS 源码，61 项打真后端，47 项静态门禁）；`tsc -b` 零错误、`npm run build` 通过。
 
-**下一步是 `10-16-miniprogram-student`（P1）**，其后 `10-16-admin-web`（P2）。
+**下一步只剩 S4 交付文档（`docs/部署说明.md`）**；四个子任务代码侧均已闭环。
 
 ---
 
@@ -20,15 +22,15 @@
 
 | 任务 | 交付物 | 优先级 | 状态 |
 |---|---|---|---|
-| `10-16-aivocab-fullstack` | 全栈（父任务） | P0 | planning · **2/4 子任务完成** |
+| `10-16-aivocab-fullstack` | 全栈（父任务） | P0 | planning · **3/4 子任务完成** |
 | `10-16-backend-api` | Spring Boot 后端 + SQL + 种子词库 | P0 | ✅ **completed，已归档** |
 | `10-16-ai-service` | FastAPI 三个 AI 接口 | P1 | ✅ **completed（代码+单测+真实调用+联调）** |
 | `10-16-miniprogram-student` | 微信小程序 F1–F10 | P1 | ✅ **completed（11 页 / 314 断言 / 编译零错误）** |
-| `10-16-admin-web` | React 管理端 4 页 | P2 | planning |
+| `10-16-admin-web` | React 管理端 4 页 | P2 | ✅ **completed（4 页 / 225 断言 / build 通过）** |
 
 任务元数据位于 `.trellis/tasks/<name>/`，含 `prd.md` / `design.md` / `implement.md` / `check.jsonl` / `research/`。
 
-> ⚠️ **任务状态与工作区记忆**：`.trellis/workspace/zhaizzH/journal-1.md` 已记 11 个 session（663 行），`index.md` 同步。继续工作时先读 journal 的 Session 8/9 可快速恢复上下文。
+> ⚠️ **任务状态与工作区记忆**：`.trellis/workspace/zhaizzH/journal-1.md` 已记 14 个 session，`index.md` 同步。继续工作时先读 journal 的 Session 13/14 可快速恢复上下文。
 
 ---
 
@@ -102,7 +104,7 @@ DBPASS=<MySQL 密码> bash backend/scripts/smoke-test.sh
 
 ---
 
-## 4. 各子任务交付详情（4.1/4.2 已完成，4.3/4.4 待做）
+## 4. 各子任务交付详情（4.1/4.2/4.3 已完成，4.4 待做）
 
 ### 4.1 `10-16-ai-service`（P1，✅ 已完成并归档）
 
@@ -165,11 +167,61 @@ PRD 原写 6 tab（含「统计」），微信 `tabBar.list` **硬上限 5 项**
 分层红线（pages 不碰 wx.request / URL / code）、错误码拼写真实性、tab 跳转 API 正确性、
 非 tab 页可达性、可点元素高度、打卡文案不写死 20、统计空态判据、关于页 BSD 版权与版本号等。
 
-### 4.3 `10-16-admin-web`（P2）
+### 4.3 `10-16-admin-web`（P2，✅ 已完成）
 
-- React 18 + TS + Vite + AntD 5，4 页：登录 / 词库管理 / 单词管理弹窗 / 用户管理 / 系统监控。
-- **依赖 backend `/api/admin/**`（10 个接口，已就绪可对接）**。
-- 导入 JSONL：前端预览前 20 行 → `multipart/form-data`（`file`/`name`/`category`）→ 展示「成功 N 条，跳过 M 条」。
+**位置**：仓库根 `frontend/`（不是 `admin-web/`——PRD 定名为 `frontend/`）。
+
+**技术栈**：React 18.3.1 + TypeScript 5.7.2 + Vite 6.4.4 + Ant Design 5.22.2 + axios 1.7.9 + react-router-dom 6.28.0。
+
+**4 个路由页**：
+
+| 路由 | 页面 | 关键约束 |
+|---|---|---|
+| `/login` | 登录 | 与小程序共用 `/api/client/auth/login`；**非 ADMIN 不落 token**（存了等于半个登录态，后续全 403） |
+| `/wordbank` | 词库管理 | 列表 + 删除 + `查看单词` 弹窗 + JSONL 导入 |
+| `/users` | 用户管理 | 分页 + 搜索 + 禁用/启用；**ADMIN 行按钮 disabled**（后端返 1005，前端主动预防）；**不做状态筛选**（实测后端忽略 `status` 参数） |
+| `/monitor` | 系统监控 | 4 张 StatCard + 按功能拆分表 + 降级事件表；`successRate` 是**数字百分数**不乘 100 |
+
+**分层铁律**（有静态门禁守着）：
+
+```
+pages/ components/  →  services/  →  utils/request.ts  →  后端
+```
+
+页面禁止 `fetch`/`axios`/拼 URL/判 `code`；service 只拼路径与参数；`utils/request.ts` 是唯一处理 `Result` 解包与错误分流的地方。
+
+**类型纪律**：无 `any`、无 `@ts-ignore`、无 `as` 强转（唯一豁免 `utils/request.ts` 的 `unwrap<T>`，因为 axios 拦截器运行时改返回值而类型系统不知）。
+
+**错误码分流**（`utils/request.ts` 双路：成功回调 + 错误回调都判，因为 HTTP 401/403 走 reject 分支）：
+
+| code | 处理 |
+|---|---|
+| `1006` 登录失效 / `1003` 账号禁用 | `clearAuth()` + `location.replace('/login')` |
+| `1007` 非管理员 | 跳登录页但**不清 token**（登录态是好的，只是角色不够；清了就无法区分「权限被撤」与「登录过期」） |
+| 其他（1005/2001/2004/9001…） | 抛 `ApiError(message)`，由页面 `message.error` 展示 |
+
+**5 套验证脚本（共 225 项断言）**：
+
+| 脚本 | 项数 | 依赖 | 验什么 |
+|---|---|---|---|
+| `scripts/verify_admin_api.py` | 61 | 后端 8080 + admin 账号 | 真实接口契约：三种身份登录、books 裸数组、words 跨库分页、CRUD + wordCount 联动、禁用后旧 token 1003、导入 2 好 2 坏、监控字段集合 |
+| `scripts/verify_admin_web.py` | 47 | 无 | 静态门禁：分层红线、类型安全、rowKey、DTO 对齐、依赖白名单、无硬编码凭据、useSyncExternalStore 快照稳定性 |
+| `scripts/verify_admin_frontend.py` | 27 | 无（esbuild 打包真实 TS 源码） | 直接**执行真实 `request.ts`/`auth.ts`/`services/*.ts`**：token 注入、Result 解包、1003/1006/1007 分流、service 路径与参数、multipart 不手设 Content-Type |
+| `scripts/verify_admin_browser.py` | 38 | Vite 5173 + 后端 + Chrome | headless dump DOM：路由守卫拦截、4 页真实渲染、数字来自接口、无「Maximum update depth」 |
+| `scripts/verify_admin_e2e.py` | 52 | Vite 5173 + 后端 + Chrome | CDP 真实点击：填表单登录、刷新不丢登录态、搜索、新增/删除单词 + wordCount 联动、**真实 JSONL 上传预览+导入**、禁用用户后其请求 1003、清 token 被踢回登录 |
+
+**踩过的 4 个真缺陷（脚本抓到的，值得记住）**：
+
+1. **`useSyncExternalStore` 快照返回新对象 → 无限重渲染**：`getUserInfo()` 每次 `JSON.parse` 都产生新对象，React 判定快照一直变 → `Maximum update depth exceeded`，整页白屏。**修法**：快照返回 localStorage 里的**原始字符串**，用 `useMemo` 按字符串解析。静态门禁和单元测试都抓不到，只有真实浏览器能抓。
+2. **CDP 点按钮要选 `button` 而非 `div`**：AntD 的 `form-item > row > col > content > button > span` 五层 `textContent` 完全相同，按文本找会命中外层 `div`，`click()` 不提交表单。
+3. **AntD `Select` 必须派发 `mousedown` 才展开**（不是 `click`），选项是 `.ant-select-item-option` 而非 `button`。
+4. **`textarea` 的 value setter 必须取自 `HTMLTextAreaElement.prototype`**：用 `HTMLInputElement.prototype` 的 setter `call` 会抛 `TypeError`。
+
+**已知取舍**：
+
+- `npm run build` 有 843KB chunk 警告 —— AntD 全量引入，未做按需拆包。管理端是内网低频使用，可接受。
+- 前端不设 `Content-Type`（multipart）—— 手设会丢 `boundary`，后端解析失败（实测返 9001 而非 2004）。
+- `createTime` 原样展示不做 `new Date()` —— Safari 对 `yyyy-MM-dd HH:mm:ss` 不容错。
 
 ### 4.4 交付文档（P2）
 
@@ -246,6 +298,16 @@ PRD 原写 6 tab（含「统计」），微信 `tabBar.list` **硬上限 5 项**
 
 ---
 
+### 管理端账号
+
+| 项 | 值 |
+|---|---|
+| 用户名 | `admin` |
+| 密码 | `Admin@12345` |
+| userId / role | `444` / `ADMIN` |
+| 创建方式 | `PYTHONIOENCODING=utf-8 python scripts/create-admin.py`（幂等；BCrypt 强度 10，对齐 `AuthServiceImpl.BCRYPT_STRENGTH`） |
+| 提权已有账号 | `python scripts/create-admin.py --promote <username>` |
+
 ## 7. 常用命令速查
 
 ```bash
@@ -293,6 +355,27 @@ cd "/c/software/ide/微信web开发者工具"
 
 ---
 
+```bash
+# ── 管理端（frontend/）──
+# 起开发服务器（需后端 8080 已启动；Vite 5173 strictPort）
+cd frontend && npm install && npm run dev
+
+# 前提：一次性创建管理员账号（幂等）
+PYTHONIOENCODING=utf-8 python scripts/create-admin.py
+
+# 5 套验证（共 225 项断言），按依赖从轻到重
+PYTHONIOENCODING=utf-8 python scripts/verify_admin_web.py       # 47 项静态门禁（无需服务）
+PYTHONIOENCODING=utf-8 python scripts/verify_admin_frontend.py  # 27 项执行真实 TS 源码（无需服务）
+PYTHONIOENCODING=utf-8 python scripts/verify_admin_api.py       # 61 项真实接口（需后端 8080）
+PYTHONIOENCODING=utf-8 python scripts/verify_admin_browser.py   # 38 项浏览器渲染（需 5173 + 8080 + Chrome）
+PYTHONIOENCODING=utf-8 python scripts/verify_admin_e2e.py       # 52 项 CDP 真实点击（需 5173 + 8080 + Chrome）
+
+# 类型检查 + 生产构建
+cd frontend && npx tsc -b && npm run build
+
+# 注意：GBK 控制台必须带 PYTHONIOENCODING=utf-8，否则中文断言输出乱码/解码报错
+```
+
 ## 8. 契约文档现状
 
 | 文档 | 版本 | 说明 |
@@ -323,7 +406,8 @@ cd "/c/software/ide/微信web开发者工具"
 | PRD 6 tab → 5 tab | 平台硬限制，已决策并回写 prd.md | 已解决，勿回退 |
 | 需求清单 §7 与 S3 V1.2 冲突 | 见 §8 警告 | 回写需求清单（低优先） |
 | 归档任务元数据陈旧 | `description` 仍写 27 接口 | 可忽略（已归档，本就不该再改） |
-| 管理端未开工 | P2 子任务 | 下一个任务 |
+| 管理端构建包偏大 | `npm run build` 有 843KB chunk 警告（AntD 全量引入，未按需拆包） | 内网低频使用，可接受；如要优化引入 `babel-plugin-import` 或 vite 手动分块 |
+| 交付文档未写 | `docs/部署说明.md` 未写（S4 最后一项） | 唯一剩余工作 |
 
 ---
 
