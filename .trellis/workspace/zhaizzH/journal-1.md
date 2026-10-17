@@ -1105,7 +1105,7 @@ Vite 不要求该目录存在。
 
 - 修复 4 个脚本硬编码的真实 MySQL 密码（verify_e2e/report/review_flow.py、create-admin.py），改为 DBPASS 环境变量读取
 - handoff.md 与 research/08 中的明文密码替换为占位说明
-- git-filter-repo 重写 61 提交历史，清除 <REDACTED_DB_PASSWORD> 与 AppSecret 候选值，重写前 mirror 备份到 ../_backup/
+- git-filter-repo 重写 61 提交历史，清除泄露的数据库口令与微信 AppSecret 候选值，重写前 mirror 备份到 ../_backup/
 - 排除 .claude/.agents/.pi/.workbuddy 共 105 文件 865K（AI 脚手架，含本机路径），跟踪文件 590→461
 - 文档本机绝对路径 C:\workspace\class\... 全部替换为 <repo-root>
 
